@@ -1,0 +1,24 @@
+GEM
+  remote: https://rubygems.org/
+  specs:
+    redcarpet (3.6.0)
+    rouge (4.5.1)
+    tty-cursor (0.7.1)
+    tty-screen (0.8.2)
+    unicode-display_width (3.1.4)
+      unicode-emoji (~> 4.0, >= 4.0.4)
+    unicode-emoji (4.0.4)
+
+PLATFORMS
+  ruby
+  x86_64-linux
+
+DEPENDENCIES
+  redcarpet
+  rouge
+  tty-cursor
+  tty-screen
+  unicode-display_width
+
+BUNDLED WITH
+   2.6.1
