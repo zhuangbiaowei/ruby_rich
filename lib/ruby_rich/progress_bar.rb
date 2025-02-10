@@ -1,5 +1,8 @@
 module RubyRich
   class ProgressBar
+    
+    attr_reader :progress
+
     def initialize(total, width: 50, style: :default)
       @total = total
       @progress = 0
