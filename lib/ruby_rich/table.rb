@@ -34,7 +34,7 @@ module RubyRich
     private
   
     def format_cell(cell)      
-      cell.is_a?(RichRuby::RichText) ? cell : RichRuby::RichText.new(cell.to_s)
+      cell.is_a?(RubyRich::RichText) ? cell : RubyRich::RichText.new(cell.to_s)
     end
   
     def calculate_column_widths

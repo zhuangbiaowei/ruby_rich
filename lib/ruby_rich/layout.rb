@@ -1,9 +1,10 @@
 module RubyRich
   class Layout
-    attr_accessor :name, :ratio, :size, :children, :content, :parent, :x_offset, :y_offset, :width, :height
+    attr_accessor :name, :ratio, :size, :children, :content, :parent, :live, :dialog
+    attr_accessor :x_offset, :y_offset, :width, :height, :show
     attr_reader :split_direction
 
-    def initialize(name: nil, ratio: 1, size: nil)
+    def initialize(name: nil, ratio: 1, size: nil, width: nil, height: nil)
       @name = name
       @ratio = ratio
       @size = size
@@ -12,9 +13,49 @@ module RubyRich
       @parent = nil
       @x_offset = 0
       @y_offset = 0
-      @width = nil
-      @height = nil
+      @width = width if width
+      @height = height if height
       @split_direction = nil
+      @show = true
+      @event_listeners = {}
+      @event_intercepted = false
+    end
+
+    def key(event_name, priority = 0, &block)
+      unless @event_listeners[event_name]
+        @event_listeners[event_name] = []
+      end
+      @event_listeners[event_name] << { priority: priority, block: block }
+      @event_listeners[event_name].sort_by! { |l| -l[:priority] } # Higher priority first
+    end
+
+    def show=(flag)
+      @show = flag
+      @event_intercepted = !flag
+    end
+
+    def notify_listeners(event_data)
+      return if @event_intercepted
+      if @dialog
+        @dialog.notify_listeners(event_data)
+      else
+        event_name = event_data[:name]
+        if @event_listeners[event_name]
+          @event_listeners[event_name].each do |listener|
+            next if @event_intercepted
+            result = listener[:block].call(event_data, self.root.live)
+            if result == true
+              @event_intercepted = true
+            end
+          end
+        end
+        
+        unless @event_intercepted
+          @children.each do |child|
+            child.notify_listeners(event_data)
+          end
+        end
+      end
     end
 
     def root
@@ -31,6 +72,10 @@ module RubyRich
       @split_direction = :column
       layouts.each { |l| l.parent = self }
       @children.concat(layouts)
+    end
+
+    def add_child(layout)
+      @children << layout
     end
 
     def update_content(content)
@@ -56,23 +101,47 @@ module RubyRich
       nil
     end
 
+    def show_dialog(dialog)
+      @dialog = dialog
+    end
+
+    def hide_dialog
+      @dialog.notify_listeners({:name=>:close})
+      @dialog = nil
+    end
+
     def render
       # 将缓冲区转换为字符串（每行用换行符连接）
-      render_to_buffer.map { |line| line.compact.join("") }.join("\n")
+      buffer = render_to_buffer
+      buffer.map { |line| line.compact.join("") }.join("\n")
     end
 
     def render_to_buffer
       # 初始化缓冲区（二维数组，每个元素代表一个字符）
       buffer = Array.new(@height) { Array.new(@width, " ") }
-      
       # 递归填充内容到缓冲区
       render_into(buffer)
-
+      render_dialog_into(buffer) if @dialog
       return buffer
     end
 
     def draw
       puts render
+    end
+
+    def render_dialog_into(buffer)
+      start_x = (@width - 2 - @dialog.width) / 2 + 1
+      start_y = (@height - 2 - @dialog.height) / 2 + 1
+      dialog_buffer = @dialog.render_to_buffer
+      buffer.each_with_index do |arr, y|
+        arr.each_with_index do |char, x|          
+          if x >= start_x && y >= start_y
+            if y-start_y <= dialog_buffer.size-1 && x-start_x <= dialog_buffer[y-start_y].size-1
+              buffer[y][x] = dialog_buffer[y-start_y][x-start_x]
+            end
+          end
+        end
+      end
     end
 
     def render_into(buffer)

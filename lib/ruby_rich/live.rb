@@ -8,13 +8,13 @@ module RubyRich
     def initialize
       @cache = nil
     end
-  
+    
     def print_with_pos(x,y,char)
       print "\e[?25l"   # 隐藏光标
       print "\e[#{y};#{x}H"   # 移动光标到左上角
       print char
     end
-  
+    
     def draw(buffer)
       unless @cache
         system("clear")
@@ -34,10 +34,12 @@ module RubyRich
   end
 
   class Live
+    attr_accessor :params, :app, :listening, :layout
     class << self
-      def start(layout, refresh_rate: 30, full_screen: false, &proc)
+      def start(layout, refresh_rate: 30, &proc)
         setup_terminal
         live = new(layout, refresh_rate)
+        proc.call(live) if proc
         live.run(proc)
       rescue => e
         puts e.message
@@ -60,27 +62,42 @@ module RubyRich
 
     def initialize(layout, refresh_rate)
       @layout = layout
+      @layout.live = self
       @refresh_rate = refresh_rate
       @running = true
       @last_frame = Time.now
       @cursor = TTY::Cursor
       @render = CacheRender.new
+      @console = RubyRich::Console.new
+      @params = {}
     end
 
     def run(proc = nil)
       while @running
         render_frame
-        proc.call(self) if proc
+        if @listening
+          event_data = @console.get_key()
+          @layout.notify_listeners(event_data)
+        end
         sleep 1.0 / @refresh_rate
       end
     end
 
     def stop
       @running = false
+      system("clear")
     end
 
     def move_cursor(x,y)
       print @cursor.move_to(x, y)
+    end
+
+    def find_layout(name)
+      @layout[name]
+    end
+
+    def find_panel(name)
+      @layout[name].content
     end
 
     private

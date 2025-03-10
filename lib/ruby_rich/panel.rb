@@ -1,47 +1,72 @@
 module RubyRich
   class Panel
     attr_accessor :width, :height, :content, :line_pos, :border_style, :title
-    COLORS = {
-      red: "\e[31m",
-      green: "\e[32m",
-      blue: "\e[34m",
-      yellow: "\e[33m",
-      cyan: "\e[36m",
-      white: "\e[37m",
-      reset: "\e[0m"
-    }
+    attr_accessor :title_align, :content_changed
 
-    def initialize(content = "", title: nil, border_style: :white)
+    def initialize(content = "", title: nil, border_style: :white, title_align: :center)
       @content = content
       @title = title
       @border_style = border_style
       @width = 0
       @height = 0
       @line_pos = 0
+      @title_align = title_align
     end
 
     def inner_width
       @width - 2  # Account for border characters
     end
 
-    def calculate_string_width(str)
-      width = 0
-      str.each_char do |char|
-        width += Unicode::DisplayWidth.of(char)
+    def page_up
+      @line_pos -= ( @height - 4 )
+      if @line_pos < 0
+        @line_pos = 0
       end
-      width
+      @content_changed = false
+    end
+
+    def page_down
+      unless @content.empty?
+        content_lines = wrap_content(@content)
+        @line_pos += ( @height - 4 )
+        if @line_pos + ( @height - 4 ) > content_lines.size
+          @line_pos = content_lines.size - @height + 2
+        end
+        @content_changed = false
+      end      
+    end
+
+    def home
+      @line_pos = 0
+      @content_changed = false
+    end
+
+    def end
+      unless @content.empty?
+        content_lines = wrap_content(@content)
+        @line_pos = content_lines.size - @height + 2
+        @content_changed = false
+      end
     end
 
     def render
       lines = []
-      color_code = COLORS[@border_style] || COLORS[:white]
-      reset_code = COLORS[:reset]
+      color_code = AnsiCode.color(@border_style) || AnsiCode.color(:white)
+      reset_code = AnsiCode.reset
 
       # Top border
       top_border = color_code + "┌"
       if @title
-        title_text = "[ #{@title} ]"        
-        top_border += title_text + '─' * (@width - calculate_string_width(@title)-6)
+        title_text = "[ #{@title} ]"
+        bar_width = @width - @title.display_width-6
+        case @title_align
+        when :left
+          top_border += title_text + '─' * bar_width
+        when :center
+          top_border += '─' * (bar_width/2)  + title_text + '─' * (bar_width - bar_width/2)
+        when :right
+          top_border += '─' * bar_width + title_text
+        end
       else
         top_border += '─' * (@width - 2)
       end
@@ -50,13 +75,29 @@ module RubyRich
 
       # Content area
       content_lines = wrap_content(@content)
-      if content_lines.size > @height - 2
-        @line_pos = content_lines.size - @height + 2
-        content_lines=content_lines[@line_pos..-1]
+      if @line_pos==0
+        if @content_changed == false
+          if content_lines.size > @height - 2
+            content_lines=content_lines[0..@height - 3]
+          end
+        else
+          if content_lines.size > @height - 2
+            @line_pos = content_lines.size - @height + 2
+            content_lines=content_lines[@line_pos..-1]
+            @content_changed = false
+          end
+        end
+      else
+        if @line_pos+@height-2 >= content_lines.size
+          content_lines=content_lines[@line_pos..-1]
+        else
+          content_lines=content_lines[@line_pos..@line_pos+@height-3]
+        end
       end
+      
       content_lines.each do |line|
         lines << color_code + "│" + reset_code +
-                line + " "*(@width - calculate_string_width(line) - 2) +
+                line + " "*(@width - line.display_width - 2) +
                 color_code + "│" + reset_code
       end
 
@@ -74,8 +115,13 @@ module RubyRich
       lines
     end
 
-    def update_content(new_content)
+    def content=(new_content)
       @content = new_content
+      content_lines = wrap_content(@content)
+      if content_lines.size > @height - 2
+        @line_pos = content_lines.size - @height + 2
+      end
+      @content_changed = true
     end
 
     private
@@ -84,22 +130,32 @@ module RubyRich
       result = []
       current_line = ""
       current_width = 0
-    
-      text.each_char do |char|
-        char_width = Unicode::DisplayWidth.of(char)
-        if current_width + char_width <= @width - 4
-          current_line += char
-          current_width += char_width
+      
+      # Split text into tokens of ANSI codes and regular text
+      tokens = text.scan(/(\e\[[0-9;]*m)|(.)/)
+                   .map { |m| m.compact.first }
+      
+      tokens.each do |token|
+        # Calculate width for regular text, ANSI codes have 0 width
+        if token.start_with?("\e[")
+          token_width = 0
+        else
+          token_width = token.chars.sum { |c| Unicode::DisplayWidth.of(c) }
+        end
+      
+        if current_width + token_width <= @width - 4
+          current_line += token
+          current_width += token_width
         else
           result << current_line
-          current_line = char
-          current_width = char_width
+          current_line = token
+          current_width = token_width
         end
       end
-    
-      # 添加最后一行
+      
+      # Add remaining line
       result << current_line unless current_line.empty?
-    
+      
       result
     end
 
@@ -110,97 +166,18 @@ module RubyRich
     end
   end
 end
-module RubyRich
-    class RichPanel
-        # ANSI escape codes for styling
-        ANSI_CODES = {
-          reset: "\e[0m",
-          bold: "\e[1m",
-          underline: "\e[4m",
-          color: {
-            black: "\e[30m",
-            red: "\e[31m",
-            green: "\e[32m",
-            yellow: "\e[33m",
-            blue: "\e[34m",
-            magenta: "\e[35m",
-            cyan: "\e[36m",
-            white: "\e[37m"
-          },
-          background: {
-            black: "\e[40m",
-            red: "\e[41m",
-            green: "\e[42m",
-            yellow: "\e[43m",
-            blue: "\e[44m",
-            magenta: "\e[45m",
-            cyan: "\e[46m",
-            white: "\e[47m"
-          }
-        }
-      
-        attr_accessor :title, :content, :border_color, :title_color, :footer
-      
-        def initialize(content, title: nil, footer: nil, border_color: :white, title_color: :white)
-          @content = content.is_a?(String) ? content.split("\n") : content
-          @title = title
-          @footer = footer
-          @border_color = border_color
-          @title_color = title_color
-        end
-      
-        def render
-          content_lines = format_content
-          panel_width = calculate_panel_width(content_lines)
-      
-          lines = []
-          lines << top_border(panel_width)
-          lines += content_lines.map { |line| format_line(line, panel_width) }
-          lines << bottom_border(panel_width)
-      
-          lines.join("\n")
-        end
-      
-        private
-      
-        def top_border(width)
-          title_text = @title ? colorize(" #{@title} ", @title_color) : ""
-          padding = (width - title_text.uncolorize.length - 2) / 2
-          "#{colorize("╭", @border_color)}#{colorize("─" * padding, @border_color)}#{title_text}#{colorize("─" * (width - title_text.uncolorize.length - padding - 2), @border_color)}#{colorize("╮", @border_color)}"
-        end
-      
-        def bottom_border(width)
-          footer_text = @footer ? colorize(" #{@footer} ", @title_color) : ""
-          padding = (width - footer_text.uncolorize.length - 2) / 2
-          "#{colorize("╰", @border_color)}#{colorize("─" * padding, @border_color)}#{footer_text}#{colorize("─" * (width - footer_text.uncolorize.length - padding - 2), @border_color)}#{colorize("╯", @border_color)}"
-        end
-      
-        def format_line(line, width)
-          "#{colorize("│", @border_color)} #{line.ljust(width - 4)} #{colorize("│", @border_color)}"
-        end
-      
-        def format_content
-          @content.map(&:strip)
-        end
-      
-        def calculate_panel_width(content_lines)
-          [
-            @title ? @title.uncolorize.length + 4 : 0,
-            @footer ? @footer.uncolorize.length + 4 : 0,
-            content_lines.map(&:length).max + 4
-          ].max
-        end
-      
-        def colorize(text, color)
-          code = ANSI_CODES[:color][color] || ""
-          "#{code}#{text}#{ANSI_CODES[:reset]}"
-        end
-      end
-end
 
 # Extend String to remove ANSI codes for alignment
 class String
     def uncolorize
         gsub(/\e\[[0-9;]*m/, '')
+    end
+
+    def display_width
+      width = 0
+      self.uncolorize.each_char do |char|
+        width += Unicode::DisplayWidth.of(char)
+      end
+      width
     end
 end

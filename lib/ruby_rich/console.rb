@@ -18,7 +18,7 @@ module RubyRich
       # 其他
       '[5~' => :page_up, '[6~' => :page_down,
       '[H' => :home, '[F' => :end,
-      '[2~' => :insert, '[3~' => :delete      
+      '[2~' => :insert, '[3~' => :delete
     }.freeze
 
     def initialize
@@ -76,16 +76,15 @@ module RubyRich
     def get_key(input: $stdin)
       input.raw(intr: true) do |io|
         char = io.getch
-        
         # 优先处理回车键（ASCII 13 = \r，ASCII 10 = \n）
         if char == "\r" || char == "\n"
-          return :enter
+          return {:name=>:enter}
         end
         # 单独处理 Tab 键（ASCII 9）
         if char == "\t"
-          return :tab
+          return {:name=>:tab}
         elsif char.ord == 0x07F
-          return :backspace
+          return {:name=>:backspace}
         elsif char == "\e" # 检测到转义序列
           sequence = ''
           begin
@@ -96,13 +95,17 @@ module RubyRich
             retry if IO.select([io], nil, nil, 0.01)
           rescue EOFError
           end
-          return ESCAPE_SEQUENCES[sequence] || :escape
+          if sequence.empty?
+            return {:name => :escape}
+          else
+            return {:name => ESCAPE_SEQUENCES[sequence]} || {:name => :escape}
+          end
         # 处理 Ctrl 组合键（排除 Tab 和回车）
         elsif char.ord.between?(1, 8) || char.ord.between?(10, 26)
           ctrl_char = (char.ord + 64).chr.downcase
-          return :"ctrl_#{ctrl_char}"
+          return {:name =>"ctrl_#{ctrl_char}".to_sym}
         else
-          char
+          {:name => :string, :value => char}
         end
       end
     end

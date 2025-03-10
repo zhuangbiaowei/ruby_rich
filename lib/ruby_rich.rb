@@ -16,6 +16,7 @@ require_relative 'ruby_rich/text'
 require_relative 'ruby_rich/print'
 require_relative 'ruby_rich/panel'
 require_relative 'ruby_rich/dialog'
+require_relative 'ruby_rich/ansi_code'
 require_relative 'ruby_rich/version'
 
 # 定义主模块

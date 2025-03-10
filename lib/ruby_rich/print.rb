@@ -33,7 +33,7 @@ module RubyRich
 
     def apply_style(content, style)
       style_methods = style.downcase.split
-      rich_text = RichRuby::RichText.new(content)
+      rich_text = RubyRich::RichText.new(content)
       style.downcase.split.each do |method|
       case method
         when 'bold'
