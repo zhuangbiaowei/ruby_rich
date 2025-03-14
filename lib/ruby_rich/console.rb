@@ -78,7 +78,9 @@ module RubyRich
         char = io.getch
         # 优先处理回车键（ASCII 13 = \r，ASCII 10 = \n）
         if char == "\r" || char == "\n"
-          return {:name=>:enter}
+          # 检查是否有后续输入（粘贴内容会有多个字符）
+          has_more = IO.select([io], nil, nil, 0)
+          return has_more ? {:name => :string, :value => char} : {:name=>:enter}
         end
         # 单独处理 Tab 键（ASCII 9）
         if char == "\t"

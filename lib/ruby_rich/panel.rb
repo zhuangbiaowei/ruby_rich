@@ -134,10 +134,15 @@ module RubyRich
       # Split text into tokens of ANSI codes and regular text
       tokens = text.scan(/(\e\[[0-9;]*m)|(.)/)
                    .map { |m| m.compact.first }
-      
+      start_color = nil
       tokens.each do |token|
         # Calculate width for regular text, ANSI codes have 0 width
         if token.start_with?("\e[")
+          if token == "\e[0m"
+            start_color = nil
+          else
+            start_color = token
+          end
           token_width = 0
         else
           token_width = token.chars.sum { |c| Unicode::DisplayWidth.of(c) }
@@ -148,7 +153,7 @@ module RubyRich
           current_width += token_width
         else
           result << current_line
-          current_line = token
+          current_line = start_color.to_s+token
           current_width = token_width
         end
       end
