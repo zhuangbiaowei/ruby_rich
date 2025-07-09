@@ -39,8 +39,8 @@ module RubyRich
   end
 
   # 提供一个便捷方法来创建表格
-  def self.table
-    Table.new
+  def self.table(border_style: :none)
+    Table.new(border_style: border_style)
   end
 
   # 提供一个便捷方法来进行语法高亮
