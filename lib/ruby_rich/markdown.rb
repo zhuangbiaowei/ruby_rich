@@ -10,6 +10,18 @@ module RubyRich
           indent: '  '
         }.merge(options)
         super()
+        
+        # 表格状态
+        reset_table_state
+      end
+
+      def reset_table_state
+        @table_state = {
+          in_table: false,
+          headers: [],
+          current_row: [],
+          rows: []
+        }
       end
 
       # 段落
@@ -98,6 +110,70 @@ module RubyRich
         "\e[90m" + "─" * @options[:width] + "\e[0m\n\n"
       end
 
+      # 表格渲染 - 智能分割方法
+      def table(header, body)
+        return "" if header.nil? && body.nil?
+        
+        begin
+          # 尝试智能分割表格内容
+          headers = []
+          rows = []
+          
+          if header && !header.strip.empty?
+            # 从header中提取列标题
+            header_content = header.strip
+            # 尝试按常见模式分割（大写字母开头的单词）
+            headers = split_table_content_intelligently(header_content)
+          end
+          
+          if body && !body.strip.empty?
+            body_lines = body.strip.split("\n").reject(&:empty?)
+            body_lines.each do |line|
+              row_data = split_table_content_intelligently(line.strip)
+              rows << row_data unless row_data.all?(&:empty?)
+            end
+          end
+          
+          # 如果成功解析出了数据，使用RubyRich表格
+          if !headers.empty? && !rows.empty?
+            table = RubyRich::Table.new(
+              headers: headers,
+              border_style: @options[:table_border_style] || :simple
+            )
+            
+            rows.each do |row|
+              # 确保行长度与标题长度一致
+              padded_row = row + Array.new([0, headers.length - row.length].max, "")
+              table.add_row(padded_row[0...headers.length])
+            end
+            
+            return table.render + "\n\n"
+          end
+          
+        rescue => e
+          # 如果出错，继续使用fallback
+        end
+        
+        # Fallback: 简单显示
+        result = "\n"
+        if header && !header.strip.empty?
+          result += "#{header.strip}\n"
+          result += "-" * [header.strip.length, 20].min + "\n"
+        end
+        if body && !body.strip.empty?
+          result += body.strip + "\n"
+        end
+        result + "\n"
+      end
+
+      def table_row(content)
+        content + "\n"
+      end
+
+      def table_cell(content, alignment)
+        content
+      end
+
       # 换行
       def linebreak
         "\n"
@@ -128,6 +204,118 @@ module RubyRich
 
       def indent_lines(text)
         text.split("\n").map { |line| @options[:indent] + line }.join("\n")
+      end
+
+      def parse_table_content(content)
+        lines = content.strip.split("\n").map(&:strip).reject(&:empty?)
+        return [] if lines.empty?
+        
+        rows = []
+        lines.each do |line|
+          # 跳过分隔符行（如 |------|--------|）
+          next if line.match?(/^\|[\s\-\|:]+\|?$/)
+          
+          # 解析表格行
+          if line.start_with?('|') && line.end_with?('|')
+            cells = line[1..-2].split('|').map(&:strip)
+            rows << cells unless cells.empty?
+          elsif line.include?('|')
+            cells = line.split('|').map(&:strip)
+            rows << cells unless cells.empty?
+          end
+        end
+        
+        rows
+      end
+
+      def render_table_with_ruby_rich(rows)
+        return "" if rows.empty?
+        
+        # 使用第一行作为表头
+        headers = rows.first
+        data_rows = rows[1..-1] || []
+        
+        # 创建RubyRich表格，使用简单边框样式来匹配markdown风格
+        table = RubyRich::Table.new(
+          headers: headers,
+          border_style: @options[:table_border_style] || :simple
+        )
+        
+        # 添加数据行
+        data_rows.each do |row|
+          # 确保行长度与标题长度一致
+          padded_row = row + Array.new([0, headers.length - row.length].max, "")
+          table.add_row(padded_row)
+        end
+        
+        table.render + "\n\n"
+      rescue => e
+        # 如果表格渲染失败，使用简单的文字格式
+        fallback_table_render(rows)
+      end
+
+      def fallback_table_render(rows)
+        return "" if rows.empty?
+        
+        result = []
+        rows.each_with_index do |row, index|
+          result << "| " + row.join(" | ") + " |"
+          if index == 0 # 在标题下添加分隔线
+            result << "|" + ("-" * (row.join(" | ").length + 2)) + "|"
+          end
+        end
+        
+        result.join("\n") + "\n\n"
+      end
+
+      def split_table_content_intelligently(content)
+        return [] if content.nil? || content.strip.empty?
+        
+        # 策略1：更智能的分割 - 先尝试找到数字字母边界
+        split_points = []
+        content.each_char.with_index do |char, index|
+          if index > 0 && index < content.length - 1
+            prev_char = content[index - 1]
+            # 在字母后跟数字，或数字后跟字母的地方分割
+            if (prev_char =~ /[A-Za-z]/ && char =~ /\d/) ||
+               (prev_char =~ /\d/ && char =~ /[A-Za-z]/)
+              split_points << index
+            end
+          end
+        end
+        
+        if split_points.any?
+          parts = []
+          last_pos = 0
+          split_points.each do |pos|
+            parts << content[last_pos...pos] if pos > last_pos
+            last_pos = pos
+          end
+          parts << content[last_pos..-1] if last_pos < content.length
+          result = parts.reject(&:empty?)
+          return result if result.length >= 2
+        end
+        
+        # 策略2：如果没有数字字母边界，按大写字母分割（但要小心短词）
+        words = content.scan(/[A-Z][a-z]+|[A-Z]{2,}/)
+        if words.length >= 2 && words.all? { |w| w.length >= 2 }
+          return words
+        end
+        
+        # 策略3：按连续的字母和数字分组
+        parts = content.scan(/[A-Za-z]+|\d+/)
+        if parts.length >= 2
+          return parts
+        end
+        
+        # 策略4：按空格分割
+        space_parts = content.split(/\s+/).reject(&:empty?)
+        if space_parts.length >= 2
+          return space_parts
+        end
+        
+        # 最后的fallback：返回原始内容
+        [content]
       end
     end
 

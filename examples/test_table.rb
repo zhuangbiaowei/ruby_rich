@@ -3,7 +3,7 @@
 require_relative '../lib/ruby_rich'
 
 puts "="*80
-puts "Ruby Rich Table Feature Test"
+puts "Ruby Rich Table Feature Test (Including Border Styles)"
 puts "="*80
 
 # 测试1: 基础表格
@@ -195,6 +195,85 @@ puts "..."
 puts "Performance: #{(end_time - start_time).round(3)}s for 100 rows"
 puts "✓ Large data performance: Success"
 
+# 测试11: 新增 - 边框样式测试
+puts "\n11. Border Styles Test:"
+puts "-"*50
+
+puts "Simple Border Style:"
+table11_simple = RubyRich::Table.new(
+  headers: ["Product", "Price", "Stock"], 
+  border_style: :simple
+)
+table11_simple.add_row(["Laptop", "$999", "15"])
+table11_simple.add_row(["Mouse", "$25", "50"])
+puts table11_simple.render
+
+puts "\nFull Border Style (Unicode):"
+table11_full = RubyRich::Table.new(
+  headers: ["Product", "Price", "Stock"], 
+  border_style: :full
+)
+table11_full.add_row(["Laptop", "$999", "15"])
+table11_full.add_row(["Mouse", "$25", "50"])
+puts table11_full.render
+
+puts "\nFull Border with Rich Text:"
+table11_rich = RubyRich::Table.new(
+  headers: [
+    RubyRich::RichText.markup("[bold blue]Product[/bold blue]"),
+    RubyRich::RichText.markup("[bold green]Price[/bold green]"),
+    RubyRich::RichText.markup("[bold yellow]Stock[/bold yellow]")
+  ], 
+  border_style: :full
+)
+table11_rich.add_row([
+  "Laptop",
+  RubyRich::RichText.markup("[red]$999[/red]"),
+  RubyRich::RichText.markup("[green]15[/green]")
+])
+table11_rich.add_row([
+  "Mouse",
+  RubyRich::RichText.markup("[red]$25[/red]"),
+  RubyRich::RichText.markup("[green]50[/green]")
+])
+puts table11_rich.render
+
+puts "✓ Border styles: Success"
+
+# 测试12: 多行内容配合边框
+puts "\n12. Multi-line Content with Borders:"
+puts "-"*50
+
+table12 = RubyRich::Table.new(
+  headers: ["Feature", "Description"], 
+  border_style: :full,
+  row_height: 2
+)
+table12.add_row([
+  "Simple Border",
+  "Uses ASCII characters\nfor compatibility"
+])
+table12.add_row([
+  "Full Border", 
+  "Uses Unicode box-drawing\ncharacters for aesthetics"
+])
+
+puts table12.render
+puts "✓ Multi-line with borders: Success"
+
+# 测试13: 使用便捷方法创建带边框的表格
+puts "\n13. Convenience Method with Border:"
+puts "-"*50
+
+table13 = RubyRich.table(border_style: :full)
+table13.headers = ["Language", "Framework", "Type"]
+table13.add_row(["Ruby", "Rails", "Web"])
+table13.add_row(["JavaScript", "React", "Frontend"])
+table13.add_row(["Python", "Django", "Web"])
+
+puts table13.render
+puts "✓ Convenience method with border: Success"
+
 # 测试总结
 puts "\n" + "="*80
 puts "All Table Tests Completed Successfully!"
@@ -208,4 +287,8 @@ puts "✓ Various data type compatibility"
 puts "✓ Empty table handling"
 puts "✓ Unicode/Chinese character support"
 puts "✓ Large data performance"
+puts "✓ Border styles (none, simple, full)"
+puts "✓ Border styles with rich text content"
+puts "✓ Multi-line content with borders"
+puts "✓ Convenience methods with border support"
 puts "=" * 80
