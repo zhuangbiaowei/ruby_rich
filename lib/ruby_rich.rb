@@ -16,6 +16,11 @@ require_relative 'ruby_rich/text'
 require_relative 'ruby_rich/print'
 require_relative 'ruby_rich/panel'
 require_relative 'ruby_rich/dialog'
+require_relative 'ruby_rich/syntax'
+require_relative 'ruby_rich/markdown'
+require_relative 'ruby_rich/tree'
+require_relative 'ruby_rich/columns'
+require_relative 'ruby_rich/status'
 require_relative 'ruby_rich/ansi_code'
 require_relative 'ruby_rich/version'
 
@@ -37,4 +42,29 @@ module RubyRich
   def self.table
     Table.new
   end
-end 
+
+  # 提供一个便捷方法来进行语法高亮
+  def self.syntax(code, language = nil, theme: :default)
+    Syntax.highlight(code, language, theme: theme)
+  end
+
+  # 提供一个便捷方法来渲染 Markdown
+  def self.markdown(text, options = {})
+    Markdown.render(text, options)
+  end
+
+  # 提供一个便捷方法来创建树形结构
+  def self.tree(root_name = 'Root', style: :default)
+    Tree.new(root_name, style: style)
+  end
+
+  # 提供一个便捷方法来创建多列布局
+  def self.columns(total_width: 80, gutter_width: 2)
+    Columns.new(total_width: total_width, gutter_width: gutter_width)
+  end
+
+  # 提供一个便捷方法来创建状态指示器
+  def self.status(type, **options)
+    Status.indicator(type, **options)
+  end
+end
