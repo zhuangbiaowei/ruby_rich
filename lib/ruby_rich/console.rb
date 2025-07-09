@@ -37,10 +37,23 @@ module RubyRich
       @styles[name] = attributes
     end
 
-    def print(*objects, sep: ' ', end_char: "\n")
-      line_text = objects.map(&:to_s).join(sep)
-      add_line(line_text)
-      render
+    def print(*objects, sep: ' ', end_char: "\n", immediate: false)
+      line_text = objects.map do |obj|
+        if obj.is_a?(String) && obj.include?('[')
+          # 处理 Rich markup 标记
+          RichText.markup(obj)
+        else
+          obj.to_s
+        end
+      end.join(sep)
+      
+      if immediate
+        add_line(line_text)
+        render
+      else
+        # 简单输出，不使用 Console 的缓冲和渲染系统
+        Kernel.puts line_text
+      end
     end
 
     def log(message, *objects, sep: ' ', end_char: "\n")
