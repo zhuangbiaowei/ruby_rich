@@ -70,6 +70,7 @@ module RubyRich
       @render = CacheRender.new
       @console = RubyRich::Console.new
       @params = {}
+      RubyRich.logger = Logger.new("./log/rich.log")
     end
 
     def run(proc = nil)

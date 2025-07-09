@@ -14,5 +14,11 @@ Gem::Specification.new do |s|
   s.add_development_dependency 'rake', '~> 13.0'
   s.add_development_dependency 'minitest', '~> 5.0'
   
+  s.add_dependency 'rouge', '~> 4.5.2'
+  s.add_dependency 'tty-cursor', '~> 0.7.1'
+  s.add_dependency 'tty-screen', '~> 0.8.2'
+  s.add_dependency 'redcarpet', '~> 3.6.1'
+  s.add_dependency 'unicode-display_width', '~> 3.1.4'
+  
   s.required_ruby_version = '>= 2.7.0'
 end

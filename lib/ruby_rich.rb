@@ -37,4 +37,13 @@ module RubyRich
   def self.table
     Table.new
   end
+
+  def self.logger=(logger)
+    @logger = logger
+  end
+  def self.logger
+    @logger ||= Logger.new($stdout).tap do |log|
+      log.progname = "Ruby Rich"
+    end
+  end
 end 
