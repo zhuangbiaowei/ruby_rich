@@ -2,7 +2,8 @@ require 'unicode/display_width'
 
 module RubyRich
   class Table
-    attr_accessor :headers, :rows, :align, :row_height
+    attr_accessor :rows, :align, :row_height
+    attr_reader :headers
   
     def initialize(headers: [], align: :left, row_height: 1)
       @headers = headers.map { |h| format_cell(h) }
@@ -13,6 +14,10 @@ module RubyRich
   
     def add_row(row)
       @rows << row.map { |cell| format_cell(cell) }
+    end
+
+    def headers=(new_headers)
+      @headers = new_headers.map { |h| format_cell(h) }
     end
   
     def render
