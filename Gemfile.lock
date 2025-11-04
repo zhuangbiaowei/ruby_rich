@@ -1,8 +1,8 @@
 GEM
   remote: https://rubygems.org/
   specs:
-    redcarpet (3.6.0)
-    rouge (4.5.1)
+    redcarpet (3.6.1)
+    rouge (4.5.2)
     tty-cursor (0.7.1)
     tty-reader (0.9.0)
       tty-cursor (~> 0.7)
