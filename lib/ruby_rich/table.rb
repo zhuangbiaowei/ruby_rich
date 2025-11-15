@@ -73,23 +73,23 @@ module RubyRich
     def render_multiline_row(row, column_widths)
       # Prepare each cell's lines
       row_lines = row.map.with_index do |cell, i|
-        # 获取单元格的样式序列
+        # Get cell style sequence
         style_sequence = cell.render.match(/\e\[[0-9;]*m/)&.to_s || ""
         reset_sequence = style_sequence.empty? ? "" : "\e[0m"
-        
-        # 分割成多行并保持样式
+
+        # Split into multiple lines while preserving styles
         cell_content = cell.render.split("\n")
-        
-        # 为每一行添加样式
-        cell_content.map! { |line| 
-          line = line.gsub(/\e\[[0-9;]*m/, '') # 移除可能存在的样式序列
-          style_sequence + line + reset_sequence 
+
+        # Add style to each line
+        cell_content.map! { |line|
+          line = line.gsub(/\e\[[0-9;]*m/, '') # Remove existing style sequences
+          style_sequence + line + reset_sequence
         }
-        
-        # 填充到指定的行高
+
+        # Pad to specified row height
         padded_content = cell_content + [" "] * [@row_height - cell_content.size, 0].max
-        
-        # 对每一行应用对齐，保持样式
+
+        # Apply alignment to each line while preserving styles
         padded_content.map { |line| align_cell(line, column_widths[i]) }
       end
   

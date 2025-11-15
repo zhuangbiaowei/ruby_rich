@@ -1,6 +1,6 @@
 module RubyRich
   class RichText
-    # 默认主题
+    # Default theme
     @@theme = {
       error: { color: :red, bold: true },
       success: { color: :green, bold: true },

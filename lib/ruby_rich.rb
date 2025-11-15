@@ -1,12 +1,12 @@
 # frozen_string_literal: true
 
-# 加载所有依赖的 gem
+# Load all dependency gems
 require 'rouge'
 require 'tty-cursor'
 require 'tty-screen'
 require 'redcarpet'
 
-# 加载所有内部模块
+# Load all internal modules
 require_relative 'ruby_rich/console'
 require_relative 'ruby_rich/table'
 require_relative 'ruby_rich/progress_bar'
@@ -19,21 +19,21 @@ require_relative 'ruby_rich/dialog'
 require_relative 'ruby_rich/ansi_code'
 require_relative 'ruby_rich/version'
 
-# 定义主模块
+# Define main module
 module RubyRich
   class Error < StandardError; end
-  
-  # 提供一个便捷方法来创建控制台实例
+
+  # Provide a convenient method to create console instance
   def self.console
     @console ||= Console.new
   end
 
-  # 提供一个便捷方法来创建富文本
+  # Provide a convenient method to create rich text
   def self.text(content = '')
     RichText.new(content)
   end
 
-  # 提供一个便捷方法来创建表格
+  # Provide a convenient method to create table
   def self.table
     Table.new
   end

@@ -111,15 +111,15 @@ module RubyRich
     end
 
     def render
-      # 将缓冲区转换为字符串（每行用换行符连接）
+      # Convert buffer to string (join lines with newlines)
       buffer = render_to_buffer
       buffer.map { |line| line.compact.join("") }.join("\n")
     end
 
     def render_to_buffer
-      # 初始化缓冲区（二维数组，每个元素代表一个字符）
+      # Initialize buffer (2D array, each element represents a character)
       buffer = Array.new(@height) { Array.new(@width, " ") }
-      # 递归填充内容到缓冲区
+      # Recursively fill content into buffer
       render_into(buffer)
       render_dialog_into(buffer) if @dialog
       return buffer
@@ -159,9 +159,9 @@ module RubyRich
     
         in_escape = false
         escape_char = ""
-        char_width = 0 # 初始宽度调整为0，方便位置计算
+        char_width = 0 # Initialize width to 0 for position calculation
         line.each_char do |char|
-          # 处理ANSI转义码
+          # Handle ANSI escape codes
           if in_escape
             escape_char += char
             in_escape = false if char == 'm'
@@ -169,48 +169,48 @@ module RubyRich
               escape_char = ""
             end
             next
-          elsif char.ord == 27 # 检测到转义开始符\e
+          elsif char.ord == 27 # Detect escape sequence start \e
             in_escape = true
             escape_char += char
             next
           end
-    
-          # 计算字符宽度
+
+          # Calculate character width
           char_w = case char.ord
-                   when 0x0000..0x007F then 1 # 英文字符
-                   when 0x4E00..0x9FFF then 2 # 中文字符
+                   when 0x0000..0x007F then 1 # English characters
+                   when 0x4E00..0x9FFF then 2 # Chinese characters
                    else Unicode::DisplayWidth.of(char)
                    end
-          # 计算字符的起始位置
+          # Calculate character start position
           x_start = x_offset + char_width
-    
-          # 超出右边界则跳过
+
+          # Skip if beyond right boundary
           next if x_start >= buffer[y_pos].size
-    
-          # 处理字符渲染（中文字符可能占用多个位置）
+
+          # Handle character rendering (Chinese characters may occupy multiple positions)
           char_w.times do |i|
             x_pos = x_start + i
-            break if x_pos >= buffer[y_pos].size # 超出右边界停止
+            break if x_pos >= buffer[y_pos].size # Stop at right boundary
             unless escape_char.empty?
-              char = escape_char + char + "\e[0m" # 每次都记录字符的实际颜色
+              char = escape_char + char + "\e[0m" # Record character's actual color each time
             end
-            buffer[y_pos][x_pos] = char unless i > 0 # 中文字符仅在第一个位置写入，避免覆盖
+            buffer[y_pos][x_pos] = char unless i > 0 # Write Chinese character only at first position to avoid overwriting
             buffer[y_pos][x_pos+1] = nil if char_w == 2
           end
-          char_width += char_w # 更新累计宽度
+          char_width += char_w # Update cumulative width
         end
       end
     end
 
     def calculate_node_dimensions(available_width, available_height)
-      # 只在未设置宽度时计算宽度
+      # Calculate width only when not set
       @width ||= if @size
                   [@size, available_width].min
                 else
                   available_width
                 end
 
-      # 只在未设置高度时计算高度
+      # Calculate height only when not set
       @height ||= if @size
                   [@size, available_height].min
                 else

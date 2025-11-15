@@ -10,8 +10,8 @@ module RubyRich
     end
     
     def print_with_pos(x,y,char)
-      print "\e[?25l"   # 隐藏光标
-      print "\e[#{y};#{x}H"   # 移动光标到左上角
+      print "\e[?25l"   # Hide cursor
+      print "\e[#{y};#{x}H"   # Move cursor to top-left
       print char
     end
     

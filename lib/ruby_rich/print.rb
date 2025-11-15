@@ -7,15 +7,15 @@ module RubyRich
     def print(*args)
       processed_args = args.map do |arg|
         next arg unless arg.is_a?(String)
-        
-        # 处理表情符号
+
+        # Handle emoji
         text = if arg.start_with?(':') && arg.end_with?(':')
           Emoji.find_by_alias(arg[1..-2])&.raw || arg
         else
           arg
         end
-        
-        # 处理样式标记
+
+        # Handle style markers
         while text.match?(@style_regex)
           text = text.gsub(@style_regex) do |_|
             style, content = $1, $2
@@ -52,9 +52,9 @@ module RubyRich
     end
   end
 
-  # 创建全局打印方法
+  # Create global print method
   $rich_print = RichPrint.new
   def print(*args)
     $rich_print.print(*args)
-  end 
+  end
 end

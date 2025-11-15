@@ -76,18 +76,18 @@ module RubyRich
     def get_key(input: $stdin)
       input.raw(intr: true) do |io|
         char = io.getch
-        # 优先处理回车键（ASCII 13 = \r，ASCII 10 = \n）
+        # Handle Enter key first (ASCII 13 = \r, ASCII 10 = \n)
         if char == "\r" || char == "\n"
-          # 检查是否有后续输入（粘贴内容会有多个字符）
+          # Check for subsequent input (pasted content has multiple characters)
           has_more = IO.select([io], nil, nil, 0)
           return has_more ? {:name => :string, :value => char} : {:name=>:enter}
         end
-        # 单独处理 Tab 键（ASCII 9）
+        # Handle Tab key separately (ASCII 9)
         if char == "\t"
           return {:name=>:tab}
         elsif char.ord == 0x07F
           return {:name=>:backspace}
-        elsif char == "\e" # 检测到转义序列
+        elsif char == "\e" # Detect escape sequence
           sequence = ''
           begin
             while (c = io.read_nonblock(1))
@@ -102,7 +102,7 @@ module RubyRich
           else
             return {:name => ESCAPE_SEQUENCES[sequence]} || {:name => :escape}
           end
-        # 处理 Ctrl 组合键（排除 Tab 和回车）
+        # Handle Ctrl combinations (excluding Tab and Enter)
         elsif char.ord.between?(1, 8) || char.ord.between?(10, 26)
           ctrl_char = (char.ord + 64).chr.downcase
           return {:name =>"ctrl_#{ctrl_char}".to_sym}
