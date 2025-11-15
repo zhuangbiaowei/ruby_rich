@@ -33,7 +33,7 @@ module RubyRich
           @line_pos = content_lines.size - @height + 2
         end
         @content_changed = false
-      end      
+      end
     end
 
     def home
