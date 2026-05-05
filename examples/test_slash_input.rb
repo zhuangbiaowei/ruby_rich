@@ -6,45 +6,61 @@ items = [
   { label: 'Help', value: '/help', description: 'Show available commands' },
   { label: 'Status', value: '/status', description: 'Print current status' },
   { label: 'Deploy', value: '/deploy', description: 'Run deployment flow' },
-  { label: 'Test', value: '/test', description: 'Execute test suite' }
+  { label: 'Test', value: '/test', description: 'Execute test suite' },
+  { label: 'Quit', value: '/quit', description: 'Exit this demo' }
 ]
 
-selected_item = nil
-submitted_value = nil
+status_lines = [
+  'SlashInput + Layout + Live 全屏示例',
+  "输入 '/' 召唤菜单，↑/↓ 选择，Enter 选中命令，Esc 关闭菜单。",
+  "输入 /quit 后按 Enter 退出。"
+]
+
+layout = RubyRich::Layout.new(name: :root)
+layout.split_column(
+  RubyRich::Layout.new(name: :header, size: 5),
+  RubyRich::Layout.new(name: :body, ratio: 1),
+  RubyRich::Layout.new(name: :input, size: 10)
+)
 
 slash_input = RubyRich::SlashInput.new(
   prompt: 'Command> ',
   items: items,
-  width: 80,
   on_select: lambda { |item, _live|
-    selected_item = item
+    status_lines << "Selected: #{item[:label]} (#{item[:value]})"
   },
-  on_submit: lambda { |value, _live|
-    submitted_value = value
+  on_submit: lambda { |value, live|
+    status_lines << "Submitted: #{value}"
+    live.stop if value.strip == '/quit'
   }
 )
 
-puts 'Testing SlashInput:'
-puts '=' * 50
+slash_input.attach(layout)
 
-# Type "/st" to filter to Status
-slash_input.handle_key(name: :string, value: '/')
-slash_input.handle_key(name: :string, value: 's')
-slash_input.handle_key(name: :string, value: 't')
+layout[:header].content = RubyRich::Panel.new(
+  'RubyRich SlashInput Demo',
+  title: 'Header'
+)
 
-puts "\nAfter typing '/st':"
-puts slash_input.render
+layout[:body].content = Object.new.tap do |view|
+  view.define_singleton_method(:render) do
+    visible_lines = status_lines.last(20)
+    panel = RubyRich::Panel.new(visible_lines.join("\n"), title: 'Event Log / Tips')
+    panel.height = layout[:body].height
+    panel.width = layout[:body].width
+    panel.render
+  end
+end
 
-# Select the first match with Enter
-slash_input.handle_key(name: :enter)
+layout[:input].content = Object.new.tap do |view|
+  view.define_singleton_method(:render) do
+    panel = RubyRich::Panel.new(slash_input.render.join("\n"), title: 'Input')
+    panel.height = layout[:input].height
+    panel.width = layout[:input].width
+    panel.render
+  end
+end
 
-puts "\nAfter pressing Enter to select a command:"
-puts slash_input.render
-puts "Selected item: #{selected_item&.dig(:label) || '(none)'}"
-puts "Current value: #{slash_input.value.inspect}"
-
-# Submit selected command
-slash_input.handle_key(name: :enter)
-puts "Submitted value: #{submitted_value.inspect}"
-
-puts "\nSlashInput test completed!"
+RubyRich::Live.start(layout, refresh_rate: 24) do |live|
+  live.listening = true
+end
