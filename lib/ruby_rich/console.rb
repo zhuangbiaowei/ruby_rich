@@ -129,8 +129,11 @@ module RubyRich
           sequence = char.b.bytes.drop(1).pack('C*')
 
           sleep 0.01
-          while io.ready?
-            sequence << io.getch
+          while IO.select([io], nil, nil, 0)
+            next_char = io.getch
+            break unless next_char
+
+            sequence << next_char
             break if sequence.length >= 8
           end
 
