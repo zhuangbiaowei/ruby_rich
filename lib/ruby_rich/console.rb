@@ -21,6 +21,19 @@ module RubyRich
       '[2~' => :insert, '[3~' => :delete
     }.freeze
 
+    WINDOWS_SPECIAL_KEYS = {
+      72 => :up,
+      80 => :down,
+      75 => :left,
+      77 => :right,
+      71 => :home,
+      79 => :end,
+      73 => :page_up,
+      81 => :page_down,
+      82 => :insert,
+      83 => :delete
+    }.freeze
+
     def initialize
       @lines = []
       @buffer = []
@@ -89,6 +102,11 @@ module RubyRich
     def get_key(input: $stdin)
       input.raw(intr: true) do |io|
         char = io.getch
+        bytes = char.b.bytes
+        byte = bytes.first
+
+        return { :name => :ctrl_c } if byte == 3
+
         # Handle Enter key first (ASCII 13 = \r, ASCII 10 = \n)
         if char == "\r" || char == "\n"
           # Check for subsequent input (pasted content has multiple characters)
@@ -98,26 +116,32 @@ module RubyRich
         # Handle Tab key separately (ASCII 9)
         if char == "\t"
           return {:name=>:tab}
-        elsif char.ord == 0x07F
+        elsif byte == 8 || byte == 0x7F
           return {:name=>:backspace}
+        # Windows special keys can be delivered as:
+        # - "\xE0" + a second getch byte
+        # - "\xE0H" in one read
+        elsif byte == 0 || byte == 224
+          code = bytes[1]
+          code ||= io.getch.b.bytes.first
+          return { :name => WINDOWS_SPECIAL_KEYS[code] || :"windows_special_#{code}" }
         elsif char == "\e" # Detect escape sequence
-          sequence = ''
-          begin
-            while (c = io.read_nonblock(1))
-              sequence << c
-            end
-          rescue IO::WaitReadable
-            retry if IO.select([io], nil, nil, 0.01)
-          rescue EOFError
+          sequence = char.b.bytes.drop(1).pack('C*')
+
+          sleep 0.01
+          while io.ready?
+            sequence << io.getch
+            break if sequence.length >= 8
           end
+
           if sequence.empty?
             return {:name => :escape}
           else
-            return {:name => ESCAPE_SEQUENCES[sequence]} || {:name => :escape}
+            return { :name => ESCAPE_SEQUENCES[sequence] || :"ansi_#{sequence.inspect}" }
           end
         # Handle Ctrl combinations (excluding Tab and Enter)
-        elsif char.ord.between?(1, 8) || char.ord.between?(10, 26)
-          ctrl_char = (char.ord + 64).chr.downcase
+        elsif byte.between?(1, 8) || byte.between?(10, 26)
+          ctrl_char = (byte + 64).chr.downcase
           return {:name =>"ctrl_#{ctrl_char}".to_sym}
         else
           {:name => :string, :value => char}
