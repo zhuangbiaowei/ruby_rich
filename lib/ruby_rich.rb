@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 # Load all dependency gems
+require 'logger'
 require 'rouge'
 require 'tty-cursor'
 require 'tty-screen'

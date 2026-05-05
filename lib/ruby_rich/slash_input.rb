@@ -83,7 +83,9 @@ module RubyRich
       if @menu_open
         select_current(live)
       else
-        @on_submit&.call(@value, live)
+        submitted_value = @value
+        @on_submit&.call(submitted_value, live)
+        reset_input
       end
     end
 
@@ -109,6 +111,11 @@ module RubyRich
     def close_menu
       @menu_open = false
       @selected_index = 0
+    end
+
+    def reset_input
+      @value = ""
+      close_menu
     end
 
     def filtered_items

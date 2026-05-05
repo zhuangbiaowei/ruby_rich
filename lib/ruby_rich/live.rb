@@ -1,4 +1,5 @@
 require 'io/console'
+require 'fileutils'
 require "tty-screen"
 require "tty-cursor"
 
@@ -70,6 +71,7 @@ module RubyRich
       @render = CacheRender.new
       @console = RubyRich::Console.new
       @params = {}
+      FileUtils.mkdir_p("./log")
       RubyRich.logger = Logger.new("./log/rich.log")
     end
 
