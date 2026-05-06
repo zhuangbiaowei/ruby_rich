@@ -19,6 +19,7 @@ module RubyRich
       @show = true
       @event_listeners = {}
       @event_intercepted = false
+      @mouse_capture = nil
     end
 
     def key(event_name, priority = 0, &block)
@@ -35,6 +36,8 @@ module RubyRich
     end
 
     def notify_listeners(event_data)
+      return route_mouse_event(event_data) if event_data[:type] == :mouse
+
       return if @event_intercepted
       if @dialog
         @dialog.notify_listeners(event_data)
@@ -62,6 +65,27 @@ module RubyRich
       @parent ? @parent.root : self
     end
 
+    def contains?(x, y)
+      return false unless @show
+      return false unless @width && @height
+
+      x >= @x_offset &&
+        x < @x_offset + @width &&
+        y >= @y_offset &&
+        y < @y_offset + @height
+    end
+
+    def hit_test(x, y)
+      return nil unless contains?(x, y)
+
+      @children.reverse_each do |child|
+        hit = child.hit_test(x, y)
+        return hit if hit
+      end
+
+      self
+    end
+
     def split_row(*layouts)
       @split_direction = :row
       layouts.each { |l| l.parent = self }
@@ -75,6 +99,7 @@ module RubyRich
     end
 
     def add_child(layout)
+      layout.parent = self
       @children << layout
     end
 
@@ -203,15 +228,13 @@ module RubyRich
     end
 
     def calculate_node_dimensions(available_width, available_height)
-      # Calculate width only when not set
-      @width ||= if @size
-                  [@size, available_width].min
-                else
-                  available_width
-                end
+      @width = if @size && @parent&.split_direction == :row
+                 [@size, available_width].min
+               else
+                 available_width
+               end
 
-      # Calculate height only when not set
-      @height ||= if @size
+      @height = if @size && @parent&.split_direction == :column
                   [@size, available_height].min
                 else
                   available_height
@@ -220,6 +243,9 @@ module RubyRich
       if @content.class == RubyRich::Panel
         @content.width = @width
         @content.height = @height
+      else
+        @content.width = @width if @content.respond_to?(:width=)
+        @content.height = @height if @content.respond_to?(:height=)
       end
 
       return if @children.empty?
@@ -289,6 +315,48 @@ module RubyRich
           child.calculate_node_dimensions(child.width, child.height)
         end
       end
+    end
+
+    private
+
+    def route_mouse_event(event_data)
+      if @dialog
+        @dialog.notify_listeners(event_data)
+        return
+      end
+
+      capture = root.instance_variable_get(:@mouse_capture)
+      target = capture && [:mouse_drag, :mouse_up].include?(event_data[:name]) ? capture : (hit_test(event_data[:x], event_data[:y]) || self)
+      handled = target.bubble_mouse_event(event_data)
+
+      root.instance_variable_set(:@mouse_capture, target) if event_data[:name] == :mouse_down && handled
+      root.instance_variable_set(:@mouse_capture, nil) if event_data[:name] == :mouse_up
+      handled
+    end
+
+    protected
+
+    def bubble_mouse_event(event_data)
+      current = self
+      while current
+        return true if current.dispatch_event_listeners(event_data)
+
+        current = current.parent
+      end
+
+      false
+    end
+
+    def dispatch_event_listeners(event_data)
+      listeners = @event_listeners[event_data[:name]]
+      return false unless listeners
+
+      listeners.each do |listener|
+        result = listener[:block].call(event_data, root.live)
+        return true if result == true
+      end
+
+      false
     end
 
     private
