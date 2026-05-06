@@ -2,6 +2,8 @@ require 'io/console'
 require 'fileutils'
 require "tty-screen"
 require "tty-cursor"
+require "thread"
+require_relative "terminal"
 
 module RubyRich
 
@@ -18,7 +20,7 @@ module RubyRich
     
     def draw(buffer)
       unless @cache
-        system("clear")
+        RubyRich::Terminal.clear
         print_with_pos(0,0,buffer.map { |line| line.compact.join("") }.join("\n"))
         @cache = buffer
       else
@@ -37,29 +39,31 @@ module RubyRich
   class Live
     attr_accessor :params, :app, :listening, :layout
     class << self
-      def start(layout, refresh_rate: 30, &proc)
-        setup_terminal
+      def start(layout, refresh_rate: 30, mouse: false, &proc)
+        setup_terminal(mouse: mouse)
         live = new(layout, refresh_rate)
+        live.mouse = mouse
         proc.call(live) if proc
         live.run(proc)
       rescue => e
         puts e.message
       ensure
-        restore_terminal
+        live&.shutdown
+        restore_terminal(mouse: mouse)
       end
 
       private
 
-      def setup_terminal
-        @original_state = `stty -g`
-        system("stty -echo")
+      def setup_terminal(mouse: false)
+        RubyRich::Terminal.setup(mouse: mouse)
       end
 
-      def restore_terminal
-        system("stty #{@original_state}")
-        print TTY::Cursor.show
+      def restore_terminal(mouse: false)
+        RubyRich::Terminal.restore(mouse: mouse)
       end
     end
+
+    attr_accessor :mouse
 
     def initialize(layout, refresh_rate)
       @layout = layout
@@ -70,25 +74,33 @@ module RubyRich
       @cursor = TTY::Cursor
       @render = CacheRender.new
       @console = RubyRich::Console.new
+      @event_queue = Queue.new
+      @event_thread = nil
       @params = {}
       FileUtils.mkdir_p("./log")
       RubyRich.logger = Logger.new("./log/rich.log")
     end
 
     def run(proc = nil)
+      start_event_thread if @listening
       while @running
         render_frame
-        if @listening
-          event_data = @console.get_key()
-          @layout.notify_listeners(event_data)
-        end
+        drain_event_queue if @listening
         sleep 1.0 / @refresh_rate
       end
     end
 
     def stop
       @running = false
-      system("clear")
+      shutdown
+      RubyRich::Terminal.clear
+    end
+
+    def shutdown
+      if @event_thread&.alive?
+        @event_thread.kill
+        @event_thread = nil
+      end
     end
 
     def move_cursor(x,y)
@@ -104,6 +116,32 @@ module RubyRich
     end
 
     private
+
+    def start_event_thread
+      return if @event_thread&.alive?
+
+      @event_thread = Thread.new do
+        while @running
+          begin
+            event_data = @console.get_event
+            @event_queue << event_data if event_data
+          rescue IOError, SystemCallError
+            break
+          rescue => e
+            RubyRich.logger.error("Input event failed: #{e.class}: #{e.message}")
+          end
+        end
+      end
+    end
+
+    def drain_event_queue
+      until @event_queue.empty?
+        event_data = @event_queue.pop(true)
+        @layout.notify_listeners(event_data)
+      end
+    rescue ThreadError
+      nil
+    end
 
     def render_frame
       @layout.calculate_dimensions(terminal_width, terminal_height)
