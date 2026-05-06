@@ -256,8 +256,8 @@ module RubyRich
         key_down = record[4, 4].unpack1('L') != 0
         return nil unless key_down
 
-        virtual_key = record[8, 2].unpack1('S')
-        char_code = record[12, 2].unpack1('S')
+        virtual_key = record[10, 2].unpack1('S')
+        char_code = record[14, 2].unpack1('S')
         char = char_code.zero? ? nil : char_code.chr(Encoding::UTF_8)
 
         case virtual_key
