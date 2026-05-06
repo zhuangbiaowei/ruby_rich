@@ -9,6 +9,8 @@ require 'redcarpet'
 
 # Load all internal modules
 require_relative 'ruby_rich/console'
+require_relative 'ruby_rich/event'
+require_relative 'ruby_rich/terminal'
 require_relative 'ruby_rich/table'
 require_relative 'ruby_rich/progress_bar'
 require_relative 'ruby_rich/layout'
