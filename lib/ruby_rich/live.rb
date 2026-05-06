@@ -13,7 +13,6 @@ module RubyRich
     end
     
     def print_with_pos(x,y,char)
-      print "\e[?25l"   # Hide cursor
       print "\e[#{y};#{x}H"   # Move cursor to top-left
       print char
     end
@@ -21,7 +20,7 @@ module RubyRich
     def draw(buffer)
       unless @cache
         RubyRich::Terminal.clear
-        print_with_pos(0,0,buffer.map { |line| line.compact.join("") }.join("\n"))
+        draw_full(buffer)
         @cache = buffer
       else
         buffer.each_with_index do |arr, y|
@@ -34,13 +33,22 @@ module RubyRich
         end
       end
     end
+
+    private
+
+    def draw_full(buffer)
+      buffer.each_with_index do |line, y|
+        print_with_pos(1, y + 1, line.compact.join(""))
+      end
+      $stdout.flush
+    end
   end
 
   class Live
     attr_accessor :params, :app, :listening, :layout
     class << self
-      def start(layout, refresh_rate: 30, mouse: false, &proc)
-        setup_terminal(mouse: mouse)
+      def start(layout, refresh_rate: 30, mouse: false, alt_screen: false, autowrap: false, &proc)
+        setup_terminal(mouse: mouse, alt_screen: alt_screen, autowrap: autowrap)
         live = new(layout, refresh_rate)
         live.mouse = mouse
         proc.call(live) if proc
@@ -49,17 +57,17 @@ module RubyRich
         puts e.message
       ensure
         live&.shutdown
-        restore_terminal(mouse: mouse)
+        restore_terminal(mouse: mouse, alt_screen: alt_screen)
       end
 
       private
 
-      def setup_terminal(mouse: false)
-        RubyRich::Terminal.setup(mouse: mouse)
+      def setup_terminal(mouse: false, alt_screen: false, autowrap: false)
+        RubyRich::Terminal.setup(mouse: mouse, alt_screen: alt_screen, autowrap: autowrap)
       end
 
-      def restore_terminal(mouse: false)
-        RubyRich::Terminal.restore(mouse: mouse)
+      def restore_terminal(mouse: false, alt_screen: false)
+        RubyRich::Terminal.restore(mouse: mouse, alt_screen: alt_screen, autowrap: true)
       end
     end
 

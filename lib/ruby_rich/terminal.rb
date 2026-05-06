@@ -8,6 +8,10 @@ module RubyRich
   class Terminal
     MOUSE_ENABLE = "\e[?1000h\e[?1002h\e[?1006h"
     MOUSE_DISABLE = "\e[?1006l\e[?1002l\e[?1000l"
+    AUTOWRAP_ENABLE = "\e[?7h"
+    AUTOWRAP_DISABLE = "\e[?7l"
+    ALT_SCREEN_ENABLE = "\e[?1049h"
+    ALT_SCREEN_DISABLE = "\e[?1049l"
     STD_INPUT_HANDLE = -10
     STD_OUTPUT_HANDLE = -11
     ENABLE_MOUSE_INPUT = 0x0010
@@ -29,16 +33,20 @@ module RubyRich
     MOUSE_HWHEELED = 0x0008
 
     class << self
-      def setup(mouse: false, hide_cursor: true)
+      def setup(mouse: false, hide_cursor: true, autowrap: true, alt_screen: false)
         capture_state
         enable_virtual_terminal_on_windows
         system('stty -echo') unless windows?
+        enter_alt_screen if alt_screen
+        set_autowrap(autowrap)
         print TTY::Cursor.hide if hide_cursor
         enable_mouse if mouse
       end
 
-      def restore(mouse: false, show_cursor: true)
+      def restore(mouse: false, show_cursor: true, autowrap: true, alt_screen: false)
         disable_mouse if mouse
+        set_autowrap(autowrap)
+        leave_alt_screen if alt_screen
         restore_virtual_terminal_on_windows
         system("stty #{@original_state}") if @original_state && !windows?
         print TTY::Cursor.show if show_cursor
@@ -57,8 +65,24 @@ module RubyRich
         $stdout.flush
       end
 
+      def set_autowrap(enabled)
+        print(enabled ? AUTOWRAP_ENABLE : AUTOWRAP_DISABLE)
+        $stdout.flush
+      end
+
+      def enter_alt_screen
+        print ALT_SCREEN_ENABLE
+        $stdout.flush
+      end
+
+      def leave_alt_screen
+        print ALT_SCREEN_DISABLE
+        $stdout.flush
+      end
+
       def clear
-        system(windows? ? 'cls' : 'clear')
+        print "\e[2J\e[H"
+        $stdout.flush
       end
 
       def prepare_input
