@@ -27,6 +27,10 @@ require_relative 'ruby_rich/status'
 require_relative 'ruby_rich/ansi_code'
 require_relative 'ruby_rich/slash_input'
 require_relative 'ruby_rich/viewport'
+require_relative 'ruby_rich/composer'
+require_relative 'ruby_rich/focus_manager'
+require_relative 'ruby_rich/transcript'
+require_relative 'ruby_rich/sidebar'
 require_relative 'ruby_rich/version'
 
 # Define main module
