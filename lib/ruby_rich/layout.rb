@@ -150,7 +150,7 @@ module RubyRich
       content_lines = if content.is_a?(String)
                         content.split("\n")[0...height]
                       else
-                        content.render[0...height]
+                        normalize_rendered_lines(content.render)[0...height]
                       end
     
       content_lines.each_with_index do |line, line_index|
@@ -288,6 +288,19 @@ module RubyRich
           current_y += child.height
           child.calculate_node_dimensions(child.width, child.height)
         end
+      end
+    end
+
+    private
+
+    def normalize_rendered_lines(rendered)
+      case rendered
+      when String
+        rendered.split("\n")
+      when Array
+        rendered
+      else
+        rendered.to_s.split("\n")
       end
     end
   end
