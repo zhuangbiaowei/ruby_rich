@@ -26,6 +26,7 @@ require_relative 'ruby_rich/columns'
 require_relative 'ruby_rich/status'
 require_relative 'ruby_rich/ansi_code'
 require_relative 'ruby_rich/slash_input'
+require_relative 'ruby_rich/viewport'
 require_relative 'ruby_rich/version'
 
 # Define main module
