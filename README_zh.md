@@ -65,13 +65,19 @@ end
 
 ### 主题系统
 ```ruby
-theme = RubyRich::Theme.new(
-  success: "bold green",
-  warning: "gold1",
-  error: "bold red",
-  highlight: "rgb(255,215,0)"
+theme = RubyRich::Theme.agent_dark
+
+puts theme.style("Agent", :accent)
+puts theme.style("thinking collapsed", :thinking)
+
+custom = RubyRich::Theme.new(
+  border: :blue,
+  focused_border: :cyan,
+  roles: {
+    accent: { color: :blue, bright: true, bold: true },
+    warning: { color: :yellow, bright: true }
+  }
 )
-console.apply_theme(theme)
 ```
 
 ### 布局系统
@@ -84,6 +90,27 @@ layout = RubyRich::Layout.new(
 layout.add_column("主内容区", width: 70)
 layout.add_column("侧边栏")
 console.print(layout)
+```
+
+### Agent TUI 应用壳
+```ruby
+app = RubyRich::AppShell.new(
+  title: "Agent",
+  subtitle: "DeepSeek-TUI · deepseek-v4-pro",
+  model: "deepseek-v4-pro"
+)
+
+app.update_plan("tracks update_plan // /goal /cycles")
+app.set_tasks([{ label: "turn demo", status: :in_progress }])
+app.add_user("如何配置模型？")
+app.add_thinking("正在检查配置文件。", status: "idle", collapsed: true)
+app.add_assistant("把模型设为 `deepseek-v4-pro`，并把 reasoning_effort 设为 `max`。")
+app.start
+```
+
+运行完整交互示例:
+```bash
+ruby -Ilib examples/tui_agent_shell.rb
 ```
 
 ## 🤝 贡献指南

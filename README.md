@@ -162,6 +162,27 @@ puts layout.render(show_headers: true, show_borders: true)
 layout.set_ratios(2, 1)  # 2:1 ratio
 ```
 
+### Agent TUI App Shell
+```ruby
+app = RubyRich::AppShell.new(
+  title: "Agent",
+  subtitle: "DeepSeek-TUI · deepseek-v4-pro",
+  model: "deepseek-v4-pro"
+)
+
+app.update_plan("tracks update_plan // /goal /cycles")
+app.set_tasks([{ label: "turn demo", status: :in_progress }])
+app.add_user("How should I configure the model?")
+app.add_thinking("Inspecting configuration files.", status: "idle", collapsed: true)
+app.add_assistant("Set the model to `deepseek-v4-pro` and reasoning effort to `max`.")
+app.start
+```
+
+Run the full interactive shell demo:
+```bash
+ruby -Ilib examples/tui_agent_shell.rb
+```
+
 ### Status Indicators
 ```ruby
 # Basic status indicators
@@ -286,6 +307,7 @@ ruby examples/test_tree.rb        # Tree structures
 ruby examples/test_columns.rb     # Multi-column layouts
 ruby examples/test_status.rb      # Status indicators
 ruby examples/test_enhanced_progress.rb  # Progress bars
+ruby -Ilib examples/tui_agent_shell.rb   # Agent-style TUI shell
 ```
 
 See `examples/README.md` for detailed information about each example file.
