@@ -1,4 +1,6 @@
 require 'io/console'
+require_relative 'event'
+require_relative 'terminal'
 
 module RubyRich
   class Console
@@ -99,32 +101,42 @@ module RubyRich
       system('clear')
     end
 
+    def get_event(input: $stdin)
+      if RubyRich::Terminal.windows_mouse_reporting?
+        event = RubyRich::Terminal.read_windows_input_event
+        return event if event
+      end
+
+      get_key(input: input)
+    end
+
     def get_key(input: $stdin)
       input.raw(intr: true) do |io|
+        RubyRich::Terminal.prepare_input
         char = io.getch
         bytes = char.b.bytes
         byte = bytes.first
 
-        return { :name => :ctrl_c } if byte == 3
+        return Event.key(:ctrl_c) if byte == 3
 
         # Handle Enter key first (ASCII 13 = \r, ASCII 10 = \n)
         if char == "\r" || char == "\n"
           # Check for subsequent input (pasted content has multiple characters)
           has_more = IO.select([io], nil, nil, 0)
-          return has_more ? {:name => :string, :value => char} : {:name=>:enter}
+          return has_more ? Event.key(:string, value: char) : Event.key(:enter)
         end
         # Handle Tab key separately (ASCII 9)
         if char == "\t"
-          return {:name=>:tab}
+          return Event.key(:tab)
         elsif byte == 8 || byte == 0x7F
-          return {:name=>:backspace}
+          return Event.key(:backspace)
         # Windows special keys can be delivered as:
         # - "\xE0" + a second getch byte
         # - "\xE0H" in one read
         elsif byte == 0 || byte == 224
           code = bytes[1]
           code ||= io.getch.b.bytes.first
-          return { :name => WINDOWS_SPECIAL_KEYS[code] || :"windows_special_#{code}" }
+          return Event.key(WINDOWS_SPECIAL_KEYS[code] || :"windows_special_#{code}")
         elsif char == "\e" # Detect escape sequence
           sequence = char.b.bytes.drop(1).pack('C*')
 
@@ -134,22 +146,49 @@ module RubyRich
             break unless next_char
 
             sequence << next_char
-            break if sequence.length >= 8
+            break if complete_escape_sequence?(sequence)
           end
 
           if sequence.empty?
-            return {:name => :escape}
+            return Event.key(:escape)
+          elsif (mouse_event = parse_sgr_mouse(sequence))
+            return mouse_event
           else
-            return { :name => ESCAPE_SEQUENCES[sequence] || :"ansi_#{sequence.inspect}" }
+            return Event.key(ESCAPE_SEQUENCES[sequence] || :"ansi_#{sequence.inspect}")
           end
         # Handle Ctrl combinations (excluding Tab and Enter)
         elsif byte.between?(1, 8) || byte.between?(10, 26)
           ctrl_char = (byte + 64).chr.downcase
-          return {:name =>"ctrl_#{ctrl_char}".to_sym}
+          return Event.key("ctrl_#{ctrl_char}".to_sym)
         else
-          {:name => :string, :value => char}
+          Event.key(:string, value: char)
         end
       end
+    end
+
+    def parse_sgr_mouse(sequence)
+      match = sequence.match(/\A\[<(\d+);(\d+);(\d+)([Mm])\z/)
+      return nil unless match
+
+      code = match[1].to_i
+      raw_x = match[2].to_i
+      raw_y = match[3].to_i
+      terminator = match[4]
+      button = mouse_button(code)
+      name = mouse_event_name(code, terminator)
+      direction = mouse_wheel_direction(code)
+
+      Event.mouse(
+        name,
+        button: button,
+        x: raw_x - 1,
+        y: raw_y - 1,
+        raw_x: raw_x,
+        raw_y: raw_y,
+        code: code,
+        modifiers: mouse_modifiers(code),
+        direction: direction
+      )
     end
 
     def add_line(text)
@@ -177,6 +216,47 @@ module RubyRich
     end
 
     private
+
+    def complete_escape_sequence?(sequence)
+      if sequence.start_with?('[<')
+        sequence.end_with?('M') || sequence.end_with?('m') || sequence.length >= 32
+      else
+        sequence.length >= 8
+      end
+    end
+
+    def mouse_event_name(code, terminator)
+      return :mouse_up if terminator == 'm'
+      return :mouse_wheel if (code & 64) == 64
+      return :mouse_drag if (code & 32) == 32
+
+      :mouse_down
+    end
+
+    def mouse_button(code)
+      return :wheel if (code & 64) == 64
+
+      case code & 3
+      when 0 then :left
+      when 1 then :middle
+      when 2 then :right
+      else :unknown
+      end
+    end
+
+    def mouse_wheel_direction(code)
+      return nil unless (code & 64) == 64
+
+      (code & 1) == 1 ? :down : :up
+    end
+
+    def mouse_modifiers(code)
+      modifiers = []
+      modifiers << :shift if (code & 4) == 4
+      modifiers << :alt if (code & 8) == 8
+      modifiers << :ctrl if (code & 16) == 16
+      modifiers
+    end
 
     def format_line(line)
       content = line.is_a?(RichText) ? line.render : line
