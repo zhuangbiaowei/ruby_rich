@@ -10,6 +10,17 @@ module RubyRich
       @width = 0
       @height = 0
       @selected_collapsible_index = nil
+      @focused = true
+    end
+
+    def focus
+      @focused = true
+      self
+    end
+
+    def blur
+      @focused = false
+      self
     end
 
     def attach(layout, priority: 150)
@@ -24,6 +35,8 @@ module RubyRich
     end
 
     def handle_event(event_data)
+      return false unless @focused
+
       case event_data[:name]
       when :ctrl_o
         toggle_next(:thinking)

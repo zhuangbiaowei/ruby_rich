@@ -16,6 +16,17 @@ module RubyRich
       @dragging_scrollbar = false
       @drag_start_y = nil
       @drag_start_scroll_top = nil
+      @focused = true
+    end
+
+    def focus
+      @focused = true
+      self
+    end
+
+    def blur
+      @focused = false
+      self
     end
 
     def content=(new_content)
@@ -43,6 +54,9 @@ module RubyRich
     end
 
     def handle_event(event_data, layout = nil)
+      return false if keyboard_event?(event_data) && !@focused
+      return false if mouse_event?(event_data) && !@focused
+
       case event_data[:name]
       when :page_up
         scroll_by(-page_size)
@@ -120,6 +134,14 @@ module RubyRich
 
     def rendered_lines
       @rendered_lines = normalize_lines(@content)
+    end
+
+    def keyboard_event?(event_data)
+      event_data[:type] == :key
+    end
+
+    def mouse_event?(event_data)
+      event_data[:type] == :mouse
     end
 
     def normalize_lines(value)

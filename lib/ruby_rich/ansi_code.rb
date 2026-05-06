@@ -85,6 +85,10 @@ module RubyRich
       "\e[#{ANSI_CODES[:bold]}m"
     end
 
+    def self.faint
+      "\e[#{ANSI_CODES[:faint]}m"
+    end
+
     def self.italic
       "\e[#{ANSI_CODES[:italic]}m"
     end

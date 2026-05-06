@@ -33,7 +33,7 @@ module RubyRich
 
       layout.key(:mouse_down, priority) do |_event_data, _live|
         focus
-        true
+        false
       end
 
       self
@@ -59,6 +59,8 @@ module RubyRich
     end
 
     def handle_event(event_data, live = nil)
+      return false unless focused?
+
       case event_data[:name]
       when :string
         append(event_data[:value].to_s)
@@ -79,11 +81,11 @@ module RubyRich
       lines = []
       lines << render_input_line
       if menu_open?
-        matches = filtered_commands.first(@menu_limit)
+        matches = visible_commands
         if matches.empty?
           lines << "#{AnsiCode.color(:yellow)}  No matches#{AnsiCode.reset}"
         else
-          matches.each_with_index do |command, index|
+          matches.each do |command, index|
             lines << render_command(command, index == @selected_index)
           end
         end
@@ -170,6 +172,19 @@ module RubyRich
       @commands.select do |command|
         command[:label].downcase.include?(query) || command[:value].downcase.include?(query)
       end
+    end
+
+    def visible_commands
+      count = [filtered_commands.size, @menu_limit].min
+      return [] if count.zero?
+
+      rows = visible_menu_rows
+      start = [[@selected_index - rows + 1, 0].max, [count - rows, 0].max].min
+      filtered_commands.first(@menu_limit).each_with_index.to_a[start, rows] || []
+    end
+
+    def visible_menu_rows
+      [[@height - 1, 1].max, @menu_limit].min
     end
 
     def current_query
