@@ -1,5 +1,6 @@
 #!/usr/bin/env ruby
 
+require 'bundler/setup'
 require_relative '../lib/ruby_rich'
 
 puts "\e[2J\e[H"  # 清屏并移动光标到顶部
