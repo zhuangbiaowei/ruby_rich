@@ -1,6 +1,6 @@
 # RubyRich - Advanced Ruby Terminal UI Toolkit
 
-![RubyRich Demo](https://via.placeholder.com/800x400.png?text=RubyRich+Terminal+Demo)
+![RubyRich Demo](./images/screen.png)
 
 A comprehensive Ruby terminal UI toolkit inspired by Python Rich, providing elegant formatting, advanced layouts, and professional terminal output.
 

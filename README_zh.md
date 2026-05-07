@@ -1,6 +1,6 @@
 # RubyRich - Ruby 终端富文本工具库
 
-![RubyRich 演示](https://via.placeholder.com/800x400.png?text=RubyRich+终端演示)
+![RubyRich Demo](./images/screen.png)
 
 受 Python Rich 启发开发的现代化 Ruby 终端 UI 工具库
 
