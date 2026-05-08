@@ -53,6 +53,8 @@ module RubyRich
         live.mouse = mouse
         proc.call(live) if proc
         live.run(proc)
+      rescue Interrupt
+        live&.stop
       rescue => e
         puts e.message
       ensure
@@ -83,6 +85,7 @@ module RubyRich
       @render = CacheRender.new
       @console = RubyRich::Console.new
       @event_queue = Queue.new
+      @action_queue = Queue.new
       @event_thread = nil
       @params = {}
       FileUtils.mkdir_p("./log")
@@ -92,10 +95,23 @@ module RubyRich
     def run(proc = nil)
       start_event_thread if @listening
       while @running
+        drain_action_queue
+        break unless @running
+
         render_frame
         drain_event_queue if @listening
         sleep 1.0 / @refresh_rate
       end
+    rescue Interrupt
+      @running = false
+    end
+
+    def post(&block)
+      return false unless block
+      return false unless @running
+
+      @action_queue << block
+      true
     end
 
     def stop
@@ -135,6 +151,9 @@ module RubyRich
             @event_queue << event_data if event_data
           rescue IOError, SystemCallError
             break
+          rescue Interrupt
+            @running = false
+            break
           rescue => e
             RubyRich.logger.error("Input event failed: #{e.class}: #{e.message}")
           end
@@ -149,6 +168,17 @@ module RubyRich
       end
     rescue ThreadError
       nil
+    end
+
+    def drain_action_queue
+      until @action_queue.empty?
+        action = @action_queue.pop(true)
+        action.call(self)
+      end
+    rescue ThreadError
+      nil
+    rescue => e
+      RubyRich.logger.error("UI action failed: #{e.class}: #{e.message}")
     end
 
     def render_frame

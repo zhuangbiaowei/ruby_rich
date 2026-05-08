@@ -17,8 +17,16 @@ module RubyRich
 
     def attach(root_layout, priority: 500)
       root_layout.key(:tab, priority) do |_event_data, _live|
-        focus_next
-        false
+        current = @entries.find { |entry| entry[:name] == @focused_name }
+        if current && current[:target].respond_to?(:wants_tab?) && current[:target].wants_tab?
+          false
+        else
+          next_entry = focus_next
+          target = next_entry && next_entry[:target]
+          target.ignore_next_tab if target.respond_to?(:ignore_next_tab)
+
+          false
+        end
       end
 
       root_layout.key(:mouse_down, priority) do |event_data, _live|

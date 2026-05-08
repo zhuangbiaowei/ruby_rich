@@ -94,23 +94,57 @@ console.print(layout)
 
 ### Agent TUI 应用壳
 ```ruby
-app = RubyRich::AppShell.new(
+shell = RubyRich::AgentShell.new(
   title: "Agent",
   subtitle: "DeepSeek-TUI · deepseek-v4-pro",
   model: "deepseek-v4-pro"
 )
 
-app.update_plan("tracks update_plan // /goal /cycles")
-app.set_tasks([{ label: "turn demo", status: :in_progress }])
-app.add_user("如何配置模型？")
-app.add_thinking("正在检查配置文件。", status: "idle", collapsed: true)
-app.add_assistant("把模型设为 `deepseek-v4-pro`，并把 reasoning_effort 设为 `max`。")
-app.start
+shell.on_submit { |text, attachments| handle_submit(text, attachments) }
+shell.on_interrupt { interrupt_agent }
+shell.on_mode_toggle { |mode| switch_agent_mode(mode) }
+shell.on_command { |command| run_command(command) }
+
+user_id = shell.add_user_message("如何配置模型？")
+assistant_id = shell.add_assistant_message("", streaming: true)
+shell.append_to_message(assistant_id, "把模型设为 `deepseek-v4-pro`。")
+
+tool_id = shell.start_tool_call(name: "read_file", input: "config.yml", status: :running)
+shell.finish_tool_call(tool_id, status: :done, output: "ok")
+
+shell.update_tasks([{ label: "turn demo", status: :in_progress }])
+shell.update_status("agent · ready")
+shell.show_token_usage(input: 120, output: 48, total: 168)
+shell.start
 ```
+
+`AgentShell` 的所有输出条目都会返回稳定 id。消息和工具调用条目支持 append、replace、remove。UI 运行中从工作线程调用输出 API 时，会通过 Live 的 UI 动作队列转交给 UI runtime。Shell 停止后，新增条目返回 `nil`，修改/删除类调用返回 `false`。
+
+如果需要直接控制 transcript 条目模型，可以使用 `RubyRich::Transcript::Store`:
+
+```ruby
+store = RubyRich::Transcript::Store.new
+
+entry = store.add(type: :assistant, content: "", metadata: { streaming: true })
+store.append(entry.id, "delta")
+store.replace(entry.id, "complete response")
+store.update(entry.id) { |item| item.status = :done }
+store.remove(entry.id)
+
+tool = store.add(type: :tool, content: "input", status: :running, name: "read_file")
+store.update(tool.id) { |item| item.status = :done }
+store.expand(tool.id)
+```
+
+支持的条目类型包括 `:user`、`:assistant`、`:thinking`、`:tool`、`:tool_result`、`:system`、`:error`、`:markdown`、`:diff`、`:separator`、`:progress`。Markdown 和 diff 条目会按内容版本和宽度缓存渲染结果，刷新时不会反复重算未变化的长内容。
 
 运行完整交互示例:
 ```bash
 ruby -Ilib examples/tui_agent_shell.rb
+ruby -Ilib examples/demo_agent_tui_complete.rb
+ruby -Ilib examples/demo_agent_tui_complete.rb --smoke
+ruby -Ilib examples/test_agent_shell_api.rb
+ruby -Ilib examples/test_transcript_store.rb
 ```
 
 ## 🤝 贡献指南

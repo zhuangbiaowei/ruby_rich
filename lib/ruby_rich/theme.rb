@@ -16,6 +16,12 @@ module RubyRich
 
     attr_reader :roles, :border, :focused_border
 
+    def self.auto
+      ENV["COLORFGBG"].to_s.split(";").last.to_i >= 8 ? light : agent_dark
+    rescue
+      agent_dark
+    end
+
     def self.agent_dark
       new(
         border: :blue,
@@ -32,6 +38,27 @@ module RubyRich
           status: { color: :cyan, bright: true }
         }
       )
+    end
+
+    def self.light
+      new(
+        border: :blue,
+        focused_border: :cyan,
+        roles: {
+          accent: { color: :blue, bright: false, bold: true },
+          body: { color: :black, bright: false },
+          muted: { color: :black, bright: true },
+          dim: { color: :black, bright: true },
+          success: { color: :green, bright: false },
+          warning: { color: :yellow, bright: false },
+          error: { color: :red, bright: false },
+          status: { color: :cyan, bright: false }
+        }
+      )
+    end
+
+    def self.no_color
+      new(roles: DEFAULT_ROLES.transform_values { { color: :white } }, border: :white, focused_border: :white)
     end
 
     def initialize(roles: {}, border: :blue, focused_border: :cyan)

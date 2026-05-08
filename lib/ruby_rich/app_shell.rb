@@ -2,14 +2,14 @@
 
 module RubyRich
   class AppShell
-    attr_reader :layout, :transcript, :viewport, :sidebar, :composer, :focus_manager, :theme
+    attr_reader :layout, :transcript, :viewport, :sidebar, :composer, :focus_manager, :theme, :live, :token_usage, :progress_manager
 
     DEFAULT_COMMANDS = [
-      { label: "help", value: "/help", description: "Show commands" },
-      { label: "plan", value: "/plan", description: "Append a plan note" },
-      { label: "thinking", value: "/thinking", description: "Add a thinking block" },
-      { label: "tool", value: "/tool", description: "Add a tool call" },
-      { label: "quit", value: "/quit", description: "Exit demo" }
+      { label: "/help", value: "/help", description: "Show commands" },
+      { label: "/plan", value: "/plan", description: "Append a plan note" },
+      { label: "/thinking", value: "/thinking", description: "Add a thinking block" },
+      { label: "/tool", value: "/tool", description: "Add a tool call" },
+      { label: "/quit", value: "/quit", description: "Exit demo" }
     ].freeze
 
     def initialize(title: "Agent", subtitle: nil, model: "deepseek-v4-pro", theme: Theme.agent_dark, commands: DEFAULT_COMMANDS, on_submit: nil)
@@ -19,8 +19,11 @@ module RubyRich
       @theme = theme
       @on_submit = on_submit
       @status = "agent · #{model}"
+      @token_usage = nil
+      @progress_text = nil
 
       @transcript = Transcript.new
+      @progress_manager = ProgressManager.new(on_change: ->(text) { @progress_text = text })
       @viewport = Viewport.new(@transcript, scrollbar: true, auto_scroll: true)
       @sidebar = Sidebar.new
       @composer = Composer.new(
@@ -70,6 +73,13 @@ module RubyRich
       self
     end
 
+    def add_diff(title: nil, content:, language: "diff")
+      label = title ? "#{title}\n#{content}" : content
+      @transcript.add_block(:diff, label, language: language)
+      @viewport.scroll_to_bottom
+      self
+    end
+
     def update_plan(text)
       @sidebar.update_plan(text)
       self
@@ -84,10 +94,62 @@ module RubyRich
       @status = text.to_s
     end
 
+    def update_status(text)
+      self.status = text
+      self
+    end
+
+    def show_token_usage(input: nil, output: nil, total: nil, **extra)
+      @token_usage = { input: input, output: output, total: total }.merge(extra).compact
+      self
+    end
+
+    def start_progress(message, owner: Thread.current.object_id)
+      @progress_manager.start(message, owner: owner)
+    end
+
+    def with_progress(message, &block)
+      @progress_manager.with_progress(message, &block)
+    end
+
+    def confirm(title:, message:, choices:, default: nil, &callback)
+      result = default || choices.first&.fetch(:key)
+      callback.call(result) if callback
+      result
+    end
+
+    def form(title:, fields:, &callback)
+      values = {}
+      fields.each do |field|
+        name = field.fetch(:name).to_sym
+        values[name] = field.key?(:default) ? field[:default] : default_field_value(field)
+      end
+      callback.call(values) if callback
+      values
+    end
+
+    def open_pager(text, command: ENV.fetch("PAGER", "less -R"))
+      Terminal.with_cooked(mouse: true) do
+        IO.popen(command, "w") { |io| io.write(text.to_s) }
+      end
+      true
+    rescue
+      false
+    end
+
     def start(refresh_rate: 24, mouse: true, alt_screen: false)
       Live.start(@layout, refresh_rate: refresh_rate, mouse: mouse, alt_screen: alt_screen, autowrap: false) do |live|
+        @live = live
         live.listening = true
       end
+    ensure
+      @live = nil
+    end
+
+    def stop
+      return false unless @live
+
+      @live.post { |live| live.stop } || false
     end
 
     private
@@ -103,7 +165,7 @@ module RubyRich
 
       root[:body].split_row(
         Layout.new(name: :transcript, ratio: 1),
-        Layout.new(name: :sidebar, size: 56)
+        Layout.new(name: :sidebar, size: 36)
       )
 
       root[:header].content = HeaderView.new(self)
@@ -139,7 +201,7 @@ module RubyRich
       end
     end
 
-    def handle_submit(value, live)
+    def handle_submit(value, live, attachments = [])
       case value.strip
       when "/quit"
         live&.stop
@@ -155,7 +217,7 @@ module RubyRich
         add_user(value)
       end
 
-      @on_submit&.call(value, live, self)
+      @on_submit&.call(value, live, self, attachments)
     end
 
     class FocusTarget
@@ -184,7 +246,14 @@ module RubyRich
       def render
         theme = @shell.theme
         left = "#{theme.style(@shell.instance_variable_get(:@title), :accent)}  #{theme.style(@shell.instance_variable_get(:@subtitle), :muted)}"
-        right = "#{theme.style('max', :status)}  #{theme.style('● Live', :body)}  #{theme.style('4%', :status)}"
+        usage = @shell.token_usage
+        usage_text = if usage && !usage.empty?
+                       total = usage[:total] || usage[:tokens]
+                       total ? "#{total} tok" : usage.map { |key, value| "#{key}=#{value}" }.join(" ")
+                     else
+                       "tokens --"
+                     end
+        right = "#{theme.style(@shell.instance_variable_get(:@model), :status)}  #{theme.style('● Live', :body)}  #{theme.style(usage_text, :status)}"
         [join_edges(left, right, @width)]
       end
 
@@ -238,7 +307,9 @@ module RubyRich
       def render
         theme = @shell.theme
         focus = @shell.focus_manager.focused_name || :none
-        line = "#{theme.style(@shell.instance_variable_get(:@status), :accent)}  #{theme.style('focus: ' + focus.to_s, :muted)}  #{theme.style('Tab focus · Ctrl+C quit · /quit', :dim)}"
+        progress = @shell.instance_variable_get(:@progress_text)
+        status = progress || @shell.instance_variable_get(:@status)
+        line = "#{theme.style(status, :accent)}  #{theme.style('focus: ' + focus.to_s, :muted)}  #{theme.style('Tab focus · Ctrl+C quit · /quit', :dim)}"
         [line]
       end
     end
@@ -263,6 +334,12 @@ module RubyRich
         panel.render
       end
 
+      def desired_height
+        return @height unless @component.respond_to?(:desired_height)
+
+        @component.desired_height + 2
+      end
+
       private
 
       def sync_component_dimensions
@@ -275,6 +352,15 @@ module RubyRich
       def rendered_content
         rendered = @component.render
         rendered.is_a?(Array) ? rendered.join("\n") : rendered.to_s
+      end
+    end
+
+    def default_field_value(field)
+      case field[:type]
+      when :boolean then false
+      when :multi_select then []
+      when :number then nil
+      else ""
       end
     end
   end

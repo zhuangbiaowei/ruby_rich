@@ -62,10 +62,14 @@ module RubyRich
     }
 
     def self.reset
+      return "" unless color_enabled?
+
       ANSI_CODES[:reset]
     end
 
     def self.color(color, bright=false)
+      return "" unless color_enabled?
+
       if bright
         "\e[#{ANSI_CODES[:bright_color][color]}m"
       else
@@ -74,6 +78,8 @@ module RubyRich
     end
 
     def self.background(color, bright=false)
+      return "" unless color_enabled?
+
       if bright
         "\e[#{ANSI_CODES[:bright_background][color]}m"
       else
@@ -82,18 +88,26 @@ module RubyRich
     end
 
     def self.bold
+      return "" unless color_enabled?
+
       "\e[#{ANSI_CODES[:bold]}m"
     end
 
     def self.faint
+      return "" unless color_enabled?
+
       "\e[#{ANSI_CODES[:faint]}m"
     end
 
     def self.italic
+      return "" unless color_enabled?
+
       "\e[#{ANSI_CODES[:italic]}m"
     end
 
     def self.underline(style=nil)
+      return "" unless color_enabled?
+
       case style
       when nil
         return "\e[#{ANSI_CODES[:underline]}m"
@@ -109,38 +123,56 @@ module RubyRich
     end
 
     def self.blink
+      return "" unless color_enabled?
+
       "\e[#{ANSI_CODES[:blink]}m"
     end
 
     def self.rapid_blink
+      return "" unless color_enabled?
+
       "\e[#{ANSI_CODES[:rapid_blink]}m"
     end
 
     def self.inverse
+      return "" unless color_enabled?
+
       "\e[#{ANSI_CODES[:inverse]}m"
     end
 
     def self.fraktur
+      return "" unless color_enabled?
+
       "\e[#{ANSI_CODES[:fraktur]}m"
     end
 
     def self.invisible
+      return "" unless color_enabled?
+
       "\e[#{ANSI_CODES[:invisible]}m"
     end
 
     def self.strikethrough
+      return "" unless color_enabled?
+
       "\e[#{ANSI_CODES[:strikethrough]}m"
     end
     
     def self.overline
+      return "" unless color_enabled?
+
       "\e[#{ANSI_CODES[:overline]}m"
     end
 
     def self.no_blink
+      return "" unless color_enabled?
+
       "\e[#{ANSI_CODES[:no_blink]}m"
     end
 
     def self.no_inverse
+      return "" unless color_enabled?
+
       "\e[#{ANSI_CODES[:no_inverse]}m"
     end
 
@@ -155,6 +187,8 @@ module RubyRich
       strikethrough: false,
       overline: false
       )
+      return "" unless color_enabled?
+
       code = if font_bright
         "\e[#{ANSI_CODES[:bright_color][font_color]}"
       else
@@ -194,6 +228,14 @@ module RubyRich
         code += ";" +  ANSI_CODES[:overline]
       end
       return code+"m"
+    end
+
+    def self.color_enabled?
+      ENV["NO_COLOR"].nil? && ENV["TERM"] != "dumb" && @color_enabled != false
+    end
+
+    def self.color_enabled=(enabled)
+      @color_enabled = enabled
     end
   end
 end

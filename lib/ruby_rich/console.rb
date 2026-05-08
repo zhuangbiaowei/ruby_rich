@@ -20,7 +20,12 @@ module RubyRich
       # 其他
       '[5~' => :page_up, '[6~' => :page_down,
       '[H' => :home, '[F' => :end,
-      '[2~' => :insert, '[3~' => :delete
+      '[2~' => :insert, '[3~' => :delete,
+      '[Z' => :shift_tab,
+      '[13;2u' => :shift_enter,
+      '[13;3u' => :alt_enter,
+      '[13;2~' => :shift_enter,
+      '[13;3~' => :alt_enter
     }.freeze
 
     WINDOWS_SPECIAL_KEYS = {
@@ -123,7 +128,8 @@ module RubyRich
         if char == "\r" || char == "\n"
           # Check for subsequent input (pasted content has multiple characters)
           has_more = IO.select([io], nil, nil, 0)
-          return has_more ? Event.key(:string, value: char) : Event.key(:enter)
+
+          return has_more ? Event.key(:paste, value: collect_pending_input(io, char)) : Event.key(:enter)
         end
         # Handle Tab key separately (ASCII 9)
         if char == "\t"
@@ -146,11 +152,14 @@ module RubyRich
             break unless next_char
 
             sequence << next_char
+            return read_bracketed_paste(io) if sequence == "[200~"
             break if complete_escape_sequence?(sequence)
           end
 
           if sequence.empty?
             return Event.key(:escape)
+          elsif sequence == "\r" || sequence == "\n"
+            return Event.key(:alt_enter)
           elsif (mouse_event = parse_sgr_mouse(sequence))
             return mouse_event
           else
@@ -161,7 +170,11 @@ module RubyRich
           ctrl_char = (byte + 64).chr.downcase
           return Event.key("ctrl_#{ctrl_char}".to_sym)
         else
-          Event.key(:string, value: char)
+          if IO.select([io], nil, nil, 0)
+            Event.key(:paste, value: collect_pending_input(io, char))
+          else
+            Event.key(:string, value: char)
+          end
         end
       end
     end
@@ -217,11 +230,40 @@ module RubyRich
 
     private
 
+    def read_bracketed_paste(io)
+      terminator = "\e[201~"
+      buffer = +""
+      loop do
+        char = io.getch
+        break unless char
+
+        buffer << char
+        break if buffer.end_with?(terminator)
+      end
+      buffer = normalize_paste_text(buffer.delete_suffix(terminator))
+      Event.key(:paste, value: buffer)
+    end
+
+    def collect_pending_input(io, first_char)
+      buffer = +first_char
+      while IO.select([io], nil, nil, 0)
+        char = io.getch
+        break unless char
+
+        buffer << char
+      end
+      normalize_paste_text(buffer)
+    end
+
+    def normalize_paste_text(text)
+      text.to_s.gsub(/\r\n?/, "\n")
+    end
+
     def complete_escape_sequence?(sequence)
       if sequence.start_with?('[<')
         sequence.end_with?('M') || sequence.end_with?('m') || sequence.length >= 32
       else
-        sequence.length >= 8
+        ESCAPE_SEQUENCES.key?(sequence) || sequence.length >= 8
       end
     end
 

@@ -3,7 +3,7 @@
 module RubyRich
   class Viewport
     attr_accessor :width, :height, :scroll_top
-    attr_reader :content
+    attr_reader :content, :selected_text
 
     def initialize(content = "", scrollbar: true, auto_scroll: false, scrollbar_style: :blue)
       @content = content
@@ -16,6 +16,10 @@ module RubyRich
       @dragging_scrollbar = false
       @drag_start_y = nil
       @drag_start_scroll_top = nil
+      @selecting = false
+      @selection_start = nil
+      @selection_end = nil
+      @selected_text = ""
       @focused = true
     end
 
@@ -80,11 +84,13 @@ module RubyRich
         scroll_by(event_data[:direction] == :down ? 3 : -3)
         true
       when :mouse_down
-        start_scrollbar_drag(event_data, layout)
+        return copy_selection if event_data[:button] == :right
+
+        start_scrollbar_drag(event_data, layout) || start_selection(event_data, layout)
       when :mouse_drag
-        drag_scrollbar(event_data, layout)
+        drag_scrollbar(event_data, layout) || drag_selection(event_data, layout)
       when :mouse_up
-        stop_scrollbar_drag
+        stop_scrollbar_drag || stop_selection
       else
         false
       end
@@ -99,7 +105,8 @@ module RubyRich
       lines = Array.new(@height) { "" }
 
       @height.times do |index|
-        lines[index] = fit_line(visible[index].to_s, visible_width)
+        absolute_line = @scroll_top + index
+        lines[index] = apply_selection(fit_line(visible[index].to_s, visible_width), absolute_line)
       end
 
       return lines unless show_scrollbar?
@@ -145,6 +152,8 @@ module RubyRich
     end
 
     def normalize_lines(value)
+      value.width = content_width if value.respond_to?(:width=)
+
       rendered = if value.respond_to?(:render)
                    value.render
                  else
@@ -265,6 +274,18 @@ module RubyRich
       true
     end
 
+    def start_selection(event_data, layout)
+      return false unless layout
+      return false if event_data[:x] >= layout.x_offset + content_width
+      return false unless event_data[:y].between?(layout.y_offset, layout.y_offset + @height - 1)
+
+      @selecting = true
+      @selection_start = mouse_position(event_data, layout)
+      @selection_end = @selection_start
+      @selected_text = ""
+      true
+    end
+
     def drag_scrollbar(event_data, layout)
       return false unless @dragging_scrollbar && layout
 
@@ -280,6 +301,13 @@ module RubyRich
       true
     end
 
+    def drag_selection(event_data, layout)
+      return false unless @selecting && layout
+
+      @selection_end = mouse_position(event_data, layout)
+      true
+    end
+
     def stop_scrollbar_drag
       was_dragging = @dragging_scrollbar
       @dragging_scrollbar = false
@@ -288,10 +316,153 @@ module RubyRich
       was_dragging
     end
 
+    def stop_selection
+      return false unless @selecting
+
+      @selecting = false
+      @selected_text = extract_selected_text
+      copy_selection
+      true
+    end
+
+    def copy_selection
+      return false if @selected_text.to_s.empty?
+
+      copy_to_clipboard(@selected_text)
+      true
+    end
+
     def scroll_top_for_y(y, layout)
       relative_y = [[y - layout.y_offset, 0].max, @height - 1].min
       travel = [@height - thumb_size, 1].max
       (relative_y.to_f / travel * max_scroll_top).round
+    end
+
+    def mouse_position(event_data, layout)
+      {
+        line: @scroll_top + [[event_data[:y] - layout.y_offset, 0].max, @height - 1].min,
+        col: [[event_data[:x] - layout.x_offset, 0].max, content_width].min
+      }
+    end
+
+    def normalized_selection
+      return nil unless @selection_start && @selection_end
+
+      a = @selection_start
+      b = @selection_end
+      if a[:line] < b[:line] || (a[:line] == b[:line] && a[:col] <= b[:col])
+        [a, b]
+      else
+        [b, a]
+      end
+    end
+
+    def apply_selection(line, absolute_line)
+      range = normalized_selection
+      return line unless range
+
+      start_pos, end_pos = range
+      return line if absolute_line < start_pos[:line] || absolute_line > end_pos[:line]
+
+      start_col = absolute_line == start_pos[:line] ? start_pos[:col] : 0
+      end_col = absolute_line == end_pos[:line] ? end_pos[:col] : content_width
+      highlight_display_range(line, start_col, end_col)
+    end
+
+    def highlight_display_range(line, start_col, end_col)
+      return line if end_col <= start_col
+
+      result = +""
+      width = 0
+      active = false
+      in_escape = false
+      escape = +""
+
+      line.each_char do |char|
+        if in_escape
+          escape << char
+          if char == "m"
+            result << escape
+            escape = +""
+            in_escape = false
+          end
+          next
+        elsif char.ord == 27
+          escape << char
+          in_escape = true
+          next
+        end
+
+        char_width = Unicode::DisplayWidth.of(char)
+        should_highlight = width < end_col && width + char_width > start_col
+        if should_highlight && !active
+          result << AnsiCode.inverse
+          active = true
+        elsif !should_highlight && active
+          result << AnsiCode.reset
+          active = false
+        end
+        result << char
+        width += char_width
+      end
+      result << AnsiCode.reset if active
+      result
+    end
+
+    def extract_selected_text
+      range = normalized_selection
+      return "" unless range
+
+      start_pos, end_pos = range
+      (start_pos[:line]..end_pos[:line]).map do |line_index|
+        line = strip_ansi(rendered_lines[line_index].to_s)
+        start_col = line_index == start_pos[:line] ? start_pos[:col] : 0
+        end_col = line_index == end_pos[:line] ? end_pos[:col] : display_width(line)
+        slice_display_range(line, start_col, end_col).rstrip
+      end.join("\n")
+    end
+
+    def slice_display_range(line, start_col, end_col)
+      result = +""
+      width = 0
+      line.each_char do |char|
+        char_width = Unicode::DisplayWidth.of(char)
+        result << char if width < end_col && width + char_width > start_col
+        width += char_width
+      end
+      result
+    end
+
+    def strip_ansi(text)
+      text.gsub(/\e\[[0-9;:]*m/, "")
+    end
+
+    def copy_to_clipboard(text)
+      if RubyRich::Terminal.windows?
+        copy_to_windows_clipboard(text)
+      elsif ENV["WAYLAND_DISPLAY"]
+        IO.popen("wl-copy", "w") { |io| io.write(text) }
+      elsif ENV["DISPLAY"]
+        IO.popen("xclip -selection clipboard", "w") { |io| io.write(text) }
+      elsif RUBY_PLATFORM.match?(/darwin/)
+        IO.popen("pbcopy", "w") { |io| io.write(text) }
+      end
+    rescue IOError, SystemCallError
+      nil
+    end
+
+    def copy_to_windows_clipboard(text)
+      script = "[Console]::InputEncoding=[System.Text.UTF8Encoding]::new($false); Set-Clipboard -Value ([Console]::In.ReadToEnd())"
+      IO.popen(["powershell", "-NoProfile", "-NonInteractive", "-Command", script], "w") do |io|
+        io.set_encoding(Encoding::UTF_8)
+        io.write(text.to_s.encode(Encoding::UTF_8))
+      end
+    rescue IOError, SystemCallError
+      IO.popen("clip", "w") do |io|
+        io.binmode
+        io.write("\uFEFF".encode("UTF-16LE"))
+        io.write(text.to_s.encode("UTF-16LE"))
+      end
     end
   end
 end

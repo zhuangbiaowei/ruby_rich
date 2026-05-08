@@ -250,6 +250,13 @@ module RubyRich
 
       return if @children.empty?
 
+      @children.each do |child|
+        next unless child.content.respond_to?(:desired_height)
+        next unless @split_direction == :column
+
+        child.size = [[child.content.desired_height, 1].max, available_height - 2].min
+      end
+
       case @split_direction
       when :row
         remaining_width = @width

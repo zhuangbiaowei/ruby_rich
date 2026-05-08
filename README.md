@@ -164,23 +164,83 @@ layout.set_ratios(2, 1)  # 2:1 ratio
 
 ### Agent TUI App Shell
 ```ruby
-app = RubyRich::AppShell.new(
+shell = RubyRich::AgentShell.new(
   title: "Agent",
   subtitle: "DeepSeek-TUI · deepseek-v4-pro",
   model: "deepseek-v4-pro"
 )
 
-app.update_plan("tracks update_plan // /goal /cycles")
-app.set_tasks([{ label: "turn demo", status: :in_progress }])
-app.add_user("How should I configure the model?")
-app.add_thinking("Inspecting configuration files.", status: "idle", collapsed: true)
-app.add_assistant("Set the model to `deepseek-v4-pro` and reasoning effort to `max`.")
-app.start
+shell.on_submit { |text, attachments| handle_submit(text, attachments) }
+shell.on_interrupt { interrupt_agent }
+shell.on_mode_toggle { |mode| switch_agent_mode(mode) }
+shell.on_command { |command| run_command(command) }
+
+user_id = shell.add_user_message("How should I configure the model?")
+assistant_id = shell.add_assistant_message("", streaming: true)
+shell.append_to_message(assistant_id, "Set the model to `deepseek-v4-pro`.")
+
+tool_id = shell.start_tool_call(name: "read_file", input: "config.yml", status: :running)
+shell.finish_tool_call(tool_id, status: :done, output: "ok")
+
+shell.update_tasks([{ label: "turn demo", status: :in_progress }])
+shell.update_status("agent · ready")
+shell.show_token_usage(input: 120, output: 48, total: 168)
+shell.start
 ```
+
+All AgentShell output entries return stable ids. Message and tool-call entries support append, replace, and remove operations. Calls made while the UI is running are posted through the Live UI action queue, so worker threads can update the transcript without mutating the layout directly. After the shell has stopped, add operations return `nil` and mutation operations return `false`.
+
+For lower-level transcript control, use `RubyRich::Transcript::Store`:
+
+```ruby
+store = RubyRich::Transcript::Store.new
+
+entry = store.add(type: :assistant, content: "", metadata: { streaming: true })
+store.append(entry.id, "delta")
+store.replace(entry.id, "complete response")
+store.update(entry.id) { |item| item.status = :done }
+store.remove(entry.id)
+
+tool = store.add(type: :tool, content: "input", status: :running, name: "read_file")
+store.update(tool.id) { |item| item.status = :done }
+store.expand(tool.id)
+```
+
+Supported entry types are `:user`, `:assistant`, `:thinking`, `:tool`, `:tool_result`, `:system`, `:error`, `:markdown`, `:diff`, `:separator`, and `:progress`. Markdown and diff entries cache rendered output by content version and width, so repeated refreshes do not re-render unchanged long content.
+
+### Composer and LineEditor
+```ruby
+editor = RubyRich::LineEditor.new(multiline: true, history_path: ".ruby_rich_history")
+editor.insert("hello")
+editor.newline
+editor.insert("world")
+
+composer = RubyRich::Composer.new(
+  multiline: true,
+  commands: ["/help", "/plan"],
+  on_submit: ->(text, _live, attachments) { run_agent(text, attachments) },
+  on_interrupt: -> { interrupt_agent }
+)
+
+attachment = RubyRich::Attachment.new(
+  type: :image,
+  path: "/path/to/file.png",
+  mime_type: "image/png",
+  display_name: "file.png"
+)
+composer.add_attachment(attachment)
+```
+
+`LineEditor` handles single-line and multiline editing, Home/End, vertical movement, Backspace/Delete, Ctrl+A/E/K/U/W, Enter submission, Alt+Enter or Shift+Enter newlines, deduplicated optional persistent history, and Unicode display width for CJK and emoji. `Composer` adds attachments, slash-command navigation with Tab/Shift+Tab, Ctrl+C interrupt, Ctrl+D EOF or attachment removal, Escape clear/menu close, and bracketed paste as one bulk event.
 
 Run the full interactive shell demo:
 ```bash
 ruby -Ilib examples/tui_agent_shell.rb
+ruby -Ilib examples/demo_agent_tui_complete.rb
+ruby -Ilib examples/demo_agent_tui_complete.rb --smoke
+ruby -Ilib examples/test_agent_shell_api.rb
+ruby -Ilib examples/test_transcript_store.rb
+ruby -Ilib examples/test_line_editor.rb
 ```
 
 ### Status Indicators
