@@ -88,8 +88,10 @@ module RubyRich
       @action_queue = Queue.new
       @event_thread = nil
       @params = {}
-      FileUtils.mkdir_p("./log")
-      RubyRich.logger = Logger.new("./log/rich.log")
+      if (log_path = ENV["RUBY_RICH_LOG"]).to_s.strip != ""
+        FileUtils.mkdir_p(File.dirname(log_path))
+        RubyRich.logger = Logger.new(log_path)
+      end
     end
 
     def run(proc = nil)

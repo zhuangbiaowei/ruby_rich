@@ -367,7 +367,8 @@ module RubyRich
       rendered = @editor.render_lines(width: input_width, placeholder: placeholder, focused: focused?)
       rendered.each_with_index.map do |line, index|
         prefix = index.zero? ? "#{focus_color}#{prompt}#{AnsiCode.reset} " : "  "
-        prefix + line
+        visible_line = @editor.empty? ? line : colorize_input(line)
+        prefix + visible_line
       end
     end
 
@@ -427,6 +428,12 @@ module RubyRich
 
     def inner_width
       [@width, 1].max
+    end
+
+    def colorize_input(line)
+      color = AnsiCode.color(:white, true)
+      reset = AnsiCode.reset
+      "#{color}#{line.to_s.gsub(reset, "#{reset}#{color}")}#{reset}"
     end
 
     def normalize_commands(commands)

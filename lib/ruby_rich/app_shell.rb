@@ -104,11 +104,15 @@ module RubyRich
       self
     end
 
-    def start_progress(message, owner: Thread.current.object_id)
+    def start_progress(message = nil, owner: Thread.current.object_id, style: :primary, quiet_on_fast_finish: false)
+      _ = style
+      _ = quiet_on_fast_finish
       @progress_manager.start(message, owner: owner)
     end
 
-    def with_progress(message, &block)
+    def with_progress(message = nil, style: :primary, quiet_on_fast_finish: false, &block)
+      _ = style
+      _ = quiet_on_fast_finish
       @progress_manager.with_progress(message, &block)
     end
 
@@ -187,7 +191,10 @@ module RubyRich
         .attach(@layout)
       @focus_manager.focus(:composer)
 
-      @layout.key(:ctrl_c, 1_000) { |_event, live| live.stop; false }
+      @layout.key(:ctrl_c, 1_000) do |_event, live|
+        live.stop if @stop_on_ctrl_c != false
+        false
+      end
     end
 
     def handle_select(command, _live)

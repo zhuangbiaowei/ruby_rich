@@ -460,7 +460,7 @@ module RubyRich
     def render_markdown(entry)
       cache_key = [:markdown, @width]
       entry.cache_fetch(cache_key) do
-        rendered = Markdown.render(entry.content, width: [@width, 20].max)
+        rendered = Markdown.render(entry.content, width: [@width, 20].max, table_border_style: :full)
         rendered.split("\n")
       end
     end

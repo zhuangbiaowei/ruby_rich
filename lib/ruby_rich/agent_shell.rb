@@ -16,6 +16,9 @@ module RubyRich
       @ui_thread = nil
       @mode = :chat
       super
+      @stop_on_ctrl_c = false
+      @composer.instance_variable_set(:@on_interrupt, method(:handle_interrupt))
+      @composer.instance_variable_set(:@on_eof, method(:handle_eof))
       attach_agent_controls
     end
 
@@ -64,6 +67,8 @@ module RubyRich
         return false if @state == :stopped
 
         if @live
+          return @live.stop if Thread.current == @ui_thread
+
           return @live.post { |live| live.stop } || false
         end
 
@@ -83,6 +88,14 @@ module RubyRich
 
     def add_markdown(content, streaming: false)
       add_message(:markdown, content, streaming: streaming)
+    end
+
+    def add_system_message(text)
+      add_message(:system, text)
+    end
+
+    def add_error_message(text)
+      add_message(:error, text)
     end
 
     def add_diff(title: nil, content:, language: "diff")
@@ -196,15 +209,23 @@ module RubyRich
 
     def attach_agent_controls
       @layout.key(:ctrl_c, 2_000) do |_event, live|
-        @callbacks[:interrupt]&.call
-        live.stop
-        true
+        handle_interrupt(live, self)
+        false
       end
 
       @layout.key(:ctrl_m, 2_000) do |_event, _live|
         toggle_mode
-        true
+        false
       end
+    end
+
+    def handle_interrupt(_live = nil, _source = nil)
+      @callbacks[:interrupt]&.call(input_was_empty: @composer.value.to_s.empty?)
+    end
+
+    def handle_eof(live = nil, _source = nil)
+      @callbacks[:eof]&.call if @callbacks[:eof]
+      live&.stop
     end
 
     def handle_submit(value, live, attachments = [])

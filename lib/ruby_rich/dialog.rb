@@ -4,6 +4,7 @@ module RubyRich
     attr_accessor :width, :height
 
     def initialize(title: "", content: "", width: 48, height: 8, buttons: [:ok])
+      @title = title
       @width = width
       @height = height
       terminal_width = `tput cols`.to_i
