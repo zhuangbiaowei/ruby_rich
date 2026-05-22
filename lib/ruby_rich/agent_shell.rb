@@ -219,8 +219,10 @@ module RubyRich
       end
     end
 
-    def handle_interrupt(_live = nil, _source = nil)
-      @callbacks[:interrupt]&.call(input_was_empty: @composer.value.to_s.empty?)
+    def handle_interrupt(live = nil, _source = nil)
+      input_was_empty = @composer.value.to_s.empty?
+      @callbacks[:interrupt]&.call(input_was_empty: input_was_empty)
+      live&.stop
     end
 
     def handle_eof(live = nil, _source = nil)
@@ -230,9 +232,15 @@ module RubyRich
 
     def handle_submit(value, live, attachments = [])
       text = value.to_s
+      stripped = text.strip
       if text.start_with?("/")
         command = text.split(/\s+/, 2).first
         @callbacks[:command]&.call(command)
+      end
+
+      if stripped == "/quit"
+        live&.stop
+        return
       end
 
       @callbacks[:submit]&.call(text, attachments)

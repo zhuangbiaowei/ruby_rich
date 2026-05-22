@@ -160,11 +160,12 @@ module RubyRich
     class Store
       include Enumerable
 
-      attr_reader :entries
+      attr_reader :entries, :version
 
       def initialize
         @entries = []
         @sequence = 0
+        @version = 0
         @mutex = Mutex.new
       end
 
@@ -183,6 +184,7 @@ module RubyRich
             name: name
           )
           @entries << entry
+          touch
           entry
         end
       end
@@ -201,6 +203,7 @@ module RubyRich
           return false unless index
 
           @entries.delete_at(index)
+          touch
           true
         end
       end
@@ -241,8 +244,13 @@ module RubyRich
           return false unless entry
 
           yield entry
+          touch
           true
         end
+      end
+
+      def touch
+        @version += 1
       end
 
       def normalize_type(type)
@@ -276,6 +284,10 @@ module RubyRich
 
     def blocks
       @store.entries
+    end
+
+    def version
+      @store.version
     end
 
     def focus

@@ -1,7 +1,8 @@
 module RubyRich
   class Panel
-    attr_accessor :width, :height, :content, :line_pos, :border_style, :title
+    attr_accessor :height, :content, :line_pos, :border_style, :title
     attr_accessor :title_align, :content_changed
+    attr_reader :width
 
     def initialize(content = "", title: nil, border_style: :white, title_align: :center)
       @content = content
@@ -11,6 +12,14 @@ module RubyRich
       @height = 0
       @line_pos = 0
       @title_align = title_align
+      @wrapped_content_cache_key = nil
+      @wrapped_content_cache = nil
+    end
+
+    def width=(new_width)
+      new_width = new_width.to_i
+      invalidate_wrap_cache if @width != new_width
+      @width = new_width
     end
 
     def inner_width
@@ -117,6 +126,7 @@ module RubyRich
 
     def content=(new_content)
       @content = new_content
+      invalidate_wrap_cache
       content_lines = wrap_content(@content)
       if content_lines.size > @height - 2
         @line_pos = content_lines.size - @height + 2
@@ -125,6 +135,11 @@ module RubyRich
     end
 
     private
+
+    def invalidate_wrap_cache
+      @wrapped_content_cache_key = nil
+      @wrapped_content_cache = nil
+    end
 
     def split_text_by_width(text)
       result = []
@@ -165,9 +180,13 @@ module RubyRich
     end
 
     def wrap_content(text)
+      key = [text, @width]
+      return @wrapped_content_cache if @wrapped_content_cache_key == key && @wrapped_content_cache
+
+      @wrapped_content_cache_key = key
       text.split("\n").flat_map do |line|
         split_text_by_width(line)
-      end
+      end.tap { |lines| @wrapped_content_cache = lines }
     end
   end
 end

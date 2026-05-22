@@ -126,7 +126,8 @@ module RubyRich
       border_chars = BORDER_STYLES[@border_style]
       
       row_content = row.map.with_index do |cell, i|
-        content = bold ? cell.render : align_cell(cell.render, column_widths[i])
+        rendered = cell.render
+        content = bold ? rendered : align_cell(rendered, column_widths[i])
         aligned_content = align_cell(content, column_widths[i])
         " #{aligned_content} "
       end.join(border_chars[:vertical])
@@ -143,12 +144,13 @@ module RubyRich
       
       # Prepare each cell's lines
       row_lines = row.map.with_index do |cell, i|
+        rendered = cell.render
         # 获取单元格的样式序列
-        style_sequence = cell.render.match(/\e\[[0-9;]*m/)&.to_s || ""
+        style_sequence = rendered.match(/\e\[[0-9;]*m/)&.to_s || ""
         reset_sequence = style_sequence.empty? ? "" : "\e[0m"
         
         # 分割成多行并保持样式
-        cell_content = cell.render.split("\n")
+        cell_content = rendered.split("\n")
         
         # 为每一行添加样式
         cell_content.map! { |line| 
@@ -165,8 +167,8 @@ module RubyRich
 
       # Normalize row height
       max_height = row_lines.map(&:size).max
-      row_lines.each do |lines|
-        width = column_widths[row_lines.index(lines)]
+      row_lines.each_with_index do |lines, index|
+        width = column_widths[index]
         style_sequence = lines.first.match(/\e\[[0-9;]*m/)&.to_s || ""
         reset_sequence = style_sequence.empty? ? "" : "\e[0m"
         lines.fill(style_sequence + " " * width + reset_sequence, lines.size...max_height)
@@ -188,7 +190,7 @@ module RubyRich
       
       # Calculate widths from headers
       @headers.each_with_index do |header, i|
-        header_text = header.respond_to?(:render) ? header.render : header.to_s
+        header_text = render_cell(header)
         header_width = Unicode::DisplayWidth.of(header_text.gsub(/\e\[[0-9;]*m/, ''))
         widths[i] = [widths[i], header_width].max
       end
@@ -196,7 +198,7 @@ module RubyRich
       # Calculate widths from rows
       @rows.each do |row|
         row.each_with_index do |cell, i|
-          cell_lines = cell.render.split("\n")
+          cell_lines = render_cell(cell).split("\n")
           cell_lines.each do |line|
             # Remove ANSI escape sequences before calculating width
             plain_line = line.gsub(/\e\[[0-9;]*m/, '')
@@ -211,7 +213,8 @@ module RubyRich
   
     def render_row(row, column_widths, bold: false)
       row.map.with_index do |cell, i|
-        content = bold ? cell.render : align_cell(cell.render, column_widths[i])
+        rendered = cell.render
+        content = bold ? rendered : align_cell(rendered, column_widths[i])
         align_cell(content, column_widths[i])
       end.join(" | ").prepend("| ").concat(" |")
     end
@@ -219,12 +222,13 @@ module RubyRich
     def render_multiline_row(row, column_widths)
       # Prepare each cell's lines
       row_lines = row.map.with_index do |cell, i|
+        rendered = cell.render
         # Get cell style sequence
-        style_sequence = cell.render.match(/\e\[[0-9;]*m/)&.to_s || ""
+        style_sequence = rendered.match(/\e\[[0-9;]*m/)&.to_s || ""
         reset_sequence = style_sequence.empty? ? "" : "\e[0m"
 
         # Split into multiple lines while preserving styles
-        cell_content = cell.render.split("\n")
+        cell_content = rendered.split("\n")
 
         # Add style to each line
         cell_content.map! { |line|
@@ -241,8 +245,8 @@ module RubyRich
   
       # Normalize row height
       max_height = row_lines.map(&:size).max
-      row_lines.each do |lines|
-        width = column_widths[row_lines.index(lines)]
+      row_lines.each_with_index do |lines, index|
+        width = column_widths[index]
         style_sequence = lines.first.match(/\e\[[0-9;]*m/)&.to_s || ""
         reset_sequence = style_sequence.empty? ? "" : "\e[0m"
         lines.fill(style_sequence + " " * width + reset_sequence, lines.size...max_height)
@@ -252,6 +256,10 @@ module RubyRich
       (0...max_height).map do |line_index|
         row_lines.map { |lines| lines[line_index] }.join(" | ").prepend("| ").concat(" |")
       end
+    end
+
+    def render_cell(cell)
+      cell.respond_to?(:render) ? cell.render : cell.to_s
     end
   
     def align_cell(content, width)

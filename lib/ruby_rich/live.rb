@@ -12,9 +12,9 @@ module RubyRich
       @cache = nil
     end
     
-    def print_with_pos(x,y,char)
+    def print_with_pos(x,y,text)
       print "\e[#{y};#{x}H"   # Move cursor to top-left
-      print char
+      print text
     end
     
     def draw(buffer)
@@ -23,18 +23,36 @@ module RubyRich
         draw_full(buffer)
         @cache = buffer
       else
-        buffer.each_with_index do |arr, y|
-          arr.each_with_index do |char, x|
-            if @cache[y][x] != char
-              print_with_pos(x + 1 , y + 1 , char)
-              @cache[y][x] = char
-            end
-          end
-        end
+        draw_changes(buffer)
       end
     end
 
     private
+
+    def draw_changes(buffer)
+      buffer.each_with_index do |line, y|
+        cache_line = @cache[y] ||= []
+        x = 0
+        while x < line.length
+          if cache_line[x] == line[x]
+            x += 1
+            next
+          end
+
+          start = x
+          parts = []
+          while x < line.length && cache_line[x] != line[x]
+            char = line[x]
+            parts << char unless char.nil?
+            cache_line[x] = char
+            x += 1
+          end
+
+          print_with_pos(start + 1, y + 1, parts.join) unless parts.empty?
+        end
+      end
+      $stdout.flush
+    end
 
     def draw_full(buffer)
       buffer.each_with_index do |line, y|
@@ -45,6 +63,8 @@ module RubyRich
   end
 
   class Live
+    RESIZE_POLL_INTERVAL = 0.25
+
     attr_accessor :params, :app, :listening, :layout
     class << self
       def start(layout, refresh_rate: 30, mouse: false, alt_screen: false, autowrap: false, &proc)
@@ -87,6 +107,10 @@ module RubyRich
       @event_queue = Queue.new
       @action_queue = Queue.new
       @event_thread = nil
+      @wake_mutex = Mutex.new
+      @wake_condition = ConditionVariable.new
+      @dirty = true
+      @last_terminal_size = nil
       @params = {}
       if (log_path = ENV["RUBY_RICH_LOG"]).to_s.strip != ""
         FileUtils.mkdir_p(File.dirname(log_path))
@@ -97,12 +121,15 @@ module RubyRich
     def run(proc = nil)
       start_event_thread if @listening
       while @running
-        drain_action_queue
+        action_processed = drain_action_queue
         break unless @running
 
-        render_frame
-        drain_event_queue if @listening
-        sleep 1.0 / @refresh_rate
+        event_processed = @listening ? drain_event_queue : false
+        if consume_dirty || action_processed || event_processed || terminal_size_changed?
+          render_frame
+        else
+          wait_for_activity
+        end
       end
     rescue Interrupt
       @running = false
@@ -113,11 +140,21 @@ module RubyRich
       return false unless @running
 
       @action_queue << block
+      wake
+      true
+    end
+
+    def refresh
+      return false unless @running
+
+      mark_dirty
+      wake
       true
     end
 
     def stop
       @running = false
+      wake
       shutdown
       RubyRich::Terminal.clear
     end
@@ -150,7 +187,10 @@ module RubyRich
         while @running
           begin
             event_data = @console.get_event
-            @event_queue << event_data if event_data
+            if event_data
+              @event_queue << event_data
+              wake
+            end
           rescue IOError, SystemCallError
             break
           rescue Interrupt
@@ -164,28 +204,71 @@ module RubyRich
     end
 
     def drain_event_queue
+      processed = false
       until @event_queue.empty?
         event_data = @event_queue.pop(true)
         @layout.notify_listeners(event_data)
+        processed = true
       end
+      processed
     rescue ThreadError
-      nil
+      processed
     end
 
     def drain_action_queue
+      processed = false
       until @action_queue.empty?
         action = @action_queue.pop(true)
         action.call(self)
+        processed = true
       end
+      processed
     rescue ThreadError
-      nil
+      processed
     rescue => e
       RubyRich.logger.error("UI action failed: #{e.class}: #{e.message}")
+      true
     end
 
     def render_frame
-      @layout.calculate_dimensions(terminal_width, terminal_height)
+      width = terminal_width
+      height = terminal_height
+      @last_terminal_size = [width, height]
+      @layout.calculate_dimensions(width, height)
       @render.draw(@layout.render_to_buffer)
+    end
+
+    def wait_for_activity
+      @wake_mutex.synchronize do
+        return unless @running
+        return unless @action_queue.empty?
+        return if @listening && !@event_queue.empty?
+
+        @wake_condition.wait(@wake_mutex, RESIZE_POLL_INTERVAL)
+      end
+    end
+
+    def wake
+      @wake_mutex.synchronize { @wake_condition.signal }
+    end
+
+    def mark_dirty
+      @wake_mutex.synchronize { @dirty = true }
+    end
+
+    def consume_dirty
+      @wake_mutex.synchronize do
+        dirty = @dirty
+        @dirty = false
+        dirty
+      end
+    end
+
+    def terminal_size_changed?
+      current_size = [terminal_width, terminal_height]
+      changed = @last_terminal_size != current_size
+      @last_terminal_size = current_size
+      changed
     end
 
     def terminal_width

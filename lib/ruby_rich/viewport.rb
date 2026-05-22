@@ -21,6 +21,8 @@ module RubyRich
       @selection_end = nil
       @selected_text = ""
       @focused = true
+      @rendered_lines_cache_key = nil
+      @rendered_lines_cache = nil
     end
 
     def focus
@@ -36,6 +38,7 @@ module RubyRich
     def content=(new_content)
       was_at_bottom = at_bottom?
       @content = new_content
+      invalidate_rendered_lines
       scroll_to_bottom if @auto_scroll && was_at_bottom
       clamp_scroll
     end
@@ -140,7 +143,24 @@ module RubyRich
     private
 
     def rendered_lines
-      @rendered_lines = normalize_lines(@content)
+      key = rendered_lines_cache_key(@content)
+      return @rendered_lines_cache if @rendered_lines_cache_key == key && @rendered_lines_cache
+
+      @rendered_lines_cache_key = key
+      @rendered_lines_cache = normalize_lines(@content)
+    end
+
+    def invalidate_rendered_lines
+      @rendered_lines_cache_key = nil
+      @rendered_lines_cache = nil
+    end
+
+    def rendered_lines_cache_key(value)
+      [
+        value.object_id,
+        content_width,
+        value.respond_to?(:version) ? value.version : nil
+      ]
     end
 
     def keyboard_event?(event_data)
@@ -162,12 +182,58 @@ module RubyRich
 
       case rendered
       when String
-        rendered.split("\n")
+        rendered.split("\n").flat_map { |line| wrap_display_line(line, content_width) }
       when Array
-        rendered
+        rendered.flat_map { |line| wrap_display_line(line.to_s, content_width) }
       else
-        rendered.to_s.split("\n")
+        rendered.to_s.split("\n").flat_map { |line| wrap_display_line(line, content_width) }
       end
+    end
+
+    def wrap_display_line(line, target_width)
+      return [""] if line.empty?
+      return [line] if display_width(line) <= target_width
+
+      lines = []
+      current = +""
+      width = 0
+      in_escape = false
+      escape = +""
+      active_sgr = +""
+
+      line.each_char do |char|
+        if in_escape
+          escape << char
+          if char == "m"
+            current << escape
+            active_sgr = escape == AnsiCode.reset ? +"" : escape.dup
+            escape = +""
+            in_escape = false
+          end
+          next
+        elsif char.ord == 27
+          escape << char
+          in_escape = true
+          next
+        end
+
+        char_width = Unicode::DisplayWidth.of(char)
+        if width.positive? && width + char_width > target_width
+          lines << close_wrapped_line(current, active_sgr)
+          current = active_sgr.dup
+          width = 0
+        end
+
+        current << char
+        width += char_width
+      end
+
+      lines << current unless current.empty?
+      lines.empty? ? [""] : lines
+    end
+
+    def close_wrapped_line(line, active_sgr)
+      active_sgr.empty? || line.end_with?(AnsiCode.reset) ? line : "#{line}#{AnsiCode.reset}"
     end
 
     def page_size

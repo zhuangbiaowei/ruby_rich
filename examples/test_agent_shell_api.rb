@@ -27,6 +27,10 @@ class FakeLive
   def stop
     @running = false
   end
+
+  def running?
+    @running
+  end
 end
 
 def assert(condition, message)
@@ -38,6 +42,19 @@ submitted_shell = RubyRich::AgentShell.new(title: "Submit")
 submitted_shell.on_submit { |text, _attachments| submitted_shell.add_user_message(text) }
 submitted_shell.send(:handle_submit, "multi\nline", nil, [])
 assert(submitted_shell.transcript.blocks.count { |entry| entry.type == :user } == 1, "AgentShell submit does not duplicate user messages")
+
+quit_live = FakeLive.new
+submitted_shell.send(:handle_submit, "/quit", quit_live, [])
+assert(!quit_live.running?, "AgentShell /quit stops the live loop")
+
+interrupt_live = FakeLive.new
+submitted_shell.send(:handle_interrupt, interrupt_live, submitted_shell)
+assert(!interrupt_live.running?, "AgentShell Ctrl+C exits when composer input is empty")
+
+submitted_shell.composer.editor.insert("draft")
+interrupt_live_with_input = FakeLive.new
+submitted_shell.send(:handle_interrupt, interrupt_live_with_input, submitted_shell)
+assert(!interrupt_live_with_input.running?, "AgentShell Ctrl+C exits even when composer input is not empty")
 
 user_id = shell.add_user_message("hello")
 assistant_id = shell.add_assistant_message("", streaming: true)

@@ -23,11 +23,11 @@ module RubyRich
       @progress_text = nil
 
       @transcript = Transcript.new
-      @progress_manager = ProgressManager.new(on_change: ->(text) { @progress_text = text })
+      @progress_manager = ProgressManager.new(on_change: ->(text) { update_progress_text(text) })
       @viewport = Viewport.new(@transcript, scrollbar: true, auto_scroll: true)
       @sidebar = Sidebar.new
       @composer = Composer.new(
-        placeholder: "编写任务或使用 /。",
+        placeholder: "Create a task or enter /",
         commands: commands,
         on_submit: method(:handle_submit),
         on_select: method(:handle_select)
@@ -101,6 +101,12 @@ module RubyRich
 
     def show_token_usage(input: nil, output: nil, total: nil, **extra)
       @token_usage = { input: input, output: output, total: total }.merge(extra).compact
+      self
+    end
+
+    def update_progress_text(text)
+      @progress_text = text
+      @live&.refresh
       self
     end
 

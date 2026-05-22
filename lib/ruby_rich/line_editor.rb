@@ -15,18 +15,24 @@ module RubyRich
       @history_index = nil
       @chars = []
       @cursor = 0
+      @value_cache = nil
+      @lines_cache = nil
+      @line_starts_cache = nil
+      @cursor_line_col_cache_key = nil
+      @cursor_line_col_cache = nil
       load_history
       history.each { |item| add_history(item, persist: false) }
     end
 
     def value
-      @chars.join
+      @value_cache ||= @chars.join
     end
 
     def value=(text)
       @chars = text.to_s.chars
       @cursor = @chars.length
       @history_index = nil
+      invalidate_content_cache
       self
     end
 
@@ -38,6 +44,7 @@ module RubyRich
       @chars.clear
       @cursor = 0
       @history_index = nil
+      invalidate_content_cache
       self
     end
 
@@ -49,6 +56,7 @@ module RubyRich
       @chars.insert(@cursor, *new_chars)
       @cursor += new_chars.length
       @history_index = nil
+      invalidate_content_cache
       self
     end
 
@@ -62,6 +70,7 @@ module RubyRich
 
       @chars.delete_at(@cursor - 1)
       @cursor -= 1
+      invalidate_content_cache
       true
     end
 
@@ -69,36 +78,43 @@ module RubyRich
       return false if @cursor >= @chars.length
 
       @chars.delete_at(@cursor)
+      invalidate_content_cache
       true
     end
 
     def move_left
       @cursor = [@cursor - 1, 0].max
+      invalidate_cursor_cache
       self
     end
 
     def move_right
       @cursor = [@cursor + 1, @chars.length].min
+      invalidate_cursor_cache
       self
     end
 
     def home
       @cursor = current_line_start
+      invalidate_cursor_cache
       self
     end
 
     def end
       @cursor = current_line_end
+      invalidate_cursor_cache
       self
     end
 
     def buffer_start
       @cursor = 0
+      invalidate_cursor_cache
       self
     end
 
     def buffer_end
       @cursor = @chars.length
+      invalidate_cursor_cache
       self
     end
 
@@ -118,6 +134,7 @@ module RubyRich
       return false if @cursor >= @chars.length
 
       @chars.slice!(@cursor...current_line_end)
+      invalidate_content_cache
       true
     end
 
@@ -127,6 +144,7 @@ module RubyRich
 
       @chars.slice!(start...@cursor)
       @cursor = start
+      invalidate_content_cache
       true
     end
 
@@ -136,6 +154,7 @@ module RubyRich
       start = previous_word_start
       @chars.slice!(start...@cursor)
       @cursor = start
+      invalidate_content_cache
       true
     end
 
@@ -158,14 +177,19 @@ module RubyRich
     end
 
     def lines
-      text = value
-      text.empty? ? [""] : text.split("\n", -1)
+      @lines_cache ||= begin
+        text = value
+        text.empty? ? [""] : text.split("\n", -1)
+      end
     end
 
     def cursor_line_col
-      before = @chars[0...@cursor].join
-      parts = before.empty? ? [""] : before.split("\n", -1)
-      [parts.length - 1, parts.last.to_s.chars.length]
+      cache_key = [@cursor, @chars.length]
+      return @cursor_line_col_cache if @cursor_line_col_cache_key == cache_key && @cursor_line_col_cache
+
+      line_index = line_index_for_cursor
+      @cursor_line_col_cache_key = cache_key
+      @cursor_line_col_cache = [line_index, @cursor - line_starts[line_index]]
     end
 
     def render_lines(width:, placeholder: nil, focused: true)
@@ -183,6 +207,18 @@ module RubyRich
 
     private
 
+    def invalidate_content_cache
+      @value_cache = nil
+      @lines_cache = nil
+      @line_starts_cache = nil
+      invalidate_cursor_cache
+    end
+
+    def invalidate_cursor_cache
+      @cursor_line_col_cache_key = nil
+      @cursor_line_col_cache = nil
+    end
+
     def normalize_insert_text(text)
       incoming = text.to_s.gsub(/\r\n?/, "\n")
       return incoming if @multiline
@@ -191,23 +227,13 @@ module RubyRich
     end
 
     def current_line_start
-      index = @cursor - 1
-      while index >= 0
-        return index + 1 if @chars[index] == "\n"
-
-        index -= 1
-      end
-      0
+      line_starts[line_index_for_cursor]
     end
 
     def current_line_end
-      index = @cursor
-      while index < @chars.length
-        return index if @chars[index] == "\n"
-
-        index += 1
-      end
-      @chars.length
+      line_index = line_index_for_cursor
+      next_start = line_starts[line_index + 1]
+      next_start ? next_start - 1 : @chars.length
     end
 
     def move_vertical(delta)
@@ -216,18 +242,43 @@ module RubyRich
       return self if target_line.negative? || target_line >= lines.length
 
       @cursor = index_for_line_col(target_line, current_col)
+      invalidate_cursor_cache
       self
     end
 
     def index_for_line_col(line_index, col)
-      index = 0
-      lines.each_with_index do |line, current|
-        line_length = line.chars.length
-        return index + [col, line_length].min if current == line_index
+      line_start = line_starts[line_index]
+      return @chars.length unless line_start
 
-        index += line_length + 1
+      line_length = lines[line_index].chars.length
+      line_start + [col, line_length].min
+    end
+
+    def line_starts
+      @line_starts_cache ||= begin
+        starts = [0]
+        @chars.each_with_index do |char, index|
+          starts << index + 1 if char == "\n"
+        end
+        starts
       end
-      @chars.length
+    end
+
+    def line_index_for_cursor
+      starts = line_starts
+      low = 0
+      high = starts.length - 1
+
+      while low <= high
+        mid = (low + high) / 2
+        if starts[mid] <= @cursor
+          low = mid + 1
+        else
+          high = mid - 1
+        end
+      end
+
+      [high, 0].max
     end
 
     def previous_word_start
@@ -288,34 +339,23 @@ module RubyRich
       current_width = 0
       chars = line.chars
       chars.each_with_index do |char, index|
-        if marker_col == index
-          cursor = cursor_marker
-          if current_width + 1 > width
-            segments << current
-            current = +""
-            current_width = 0
-          end
-          current << cursor
-          current_width += 1
-        end
-
         char_width = display_width(char)
         if current_width + char_width > width
           segments << current
           current = +""
           current_width = 0
         end
-        current << char
+        current << (marker_col == index ? cursor_marker(char) : char)
         current_width += char_width
       end
 
-      current << cursor_marker if marker_col == chars.length
+      current << cursor_marker(" ") if marker_col == chars.length
       segments << current
       segments
     end
 
-    def cursor_marker
-      "#{AnsiCode.color(:blue, true)}_#{AnsiCode.reset}"
+    def cursor_marker(char)
+      "#{AnsiCode.inverse}#{char}#{AnsiCode.reset}"
     end
 
     def display_width(char)

@@ -433,6 +433,8 @@ module RubyRich
     def colorize_input(line)
       color = AnsiCode.color(:white, true)
       reset = AnsiCode.reset
+      return line.to_s if line.to_s.include?(AnsiCode.inverse)
+
       "#{color}#{line.to_s.gsub(reset, "#{reset}#{color}")}#{reset}"
     end
 
