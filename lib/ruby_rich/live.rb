@@ -236,6 +236,25 @@ module RubyRich
       @last_terminal_size = [width, height]
       @layout.calculate_dimensions(width, height)
       @render.draw(@layout.render_to_buffer)
+      position_native_cursor
+    end
+
+    def position_native_cursor
+      composer_layout = @layout[:composer]
+      return unless composer_layout
+
+      frame = composer_layout.content
+      component = frame.instance_variable_get(:@component) if frame
+      return unless component&.respond_to?(:native_cursor_position)
+
+      cursor = component.native_cursor_position
+      return unless cursor
+
+      row, col = cursor
+      terminal_row = composer_layout.y_offset.to_i + 1 + row.to_i
+      terminal_col = composer_layout.x_offset.to_i + 1 + col.to_i
+      print "\e[#{terminal_row + 1};#{terminal_col + 1}H"
+      $stdout.flush
     end
 
     def wait_for_activity

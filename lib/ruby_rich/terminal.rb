@@ -42,7 +42,7 @@ module RubyRich
     class << self
       attr_accessor :debug_input
 
-      def setup(mouse: false, hide_cursor: true, autowrap: true, alt_screen: false)
+      def setup(mouse: false, hide_cursor: false, autowrap: true, alt_screen: false)
         capture_state
         enable_virtual_terminal_on_windows
         system('stty -echo') unless windows?

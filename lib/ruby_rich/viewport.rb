@@ -14,6 +14,7 @@ module RubyRich
       @height = 0
       @scroll_top = 0
       @dragging_scrollbar = false
+      @dragging_viewport = false
       @drag_start_y = nil
       @drag_start_scroll_top = nil
       @selecting = false
@@ -62,7 +63,6 @@ module RubyRich
 
     def handle_event(event_data, layout = nil)
       return false if keyboard_event?(event_data) && !@focused
-      return false if mouse_event?(event_data) && !@focused
 
       case event_data[:name]
       when :page_up
@@ -89,11 +89,11 @@ module RubyRich
       when :mouse_down
         return copy_selection if event_data[:button] == :right
 
-        start_scrollbar_drag(event_data, layout) || start_selection(event_data, layout)
+        start_scrollbar_drag(event_data, layout) || start_viewport_drag(event_data, layout)
       when :mouse_drag
-        drag_scrollbar(event_data, layout) || drag_selection(event_data, layout)
+        drag_scrollbar(event_data, layout) || drag_viewport(event_data, layout) || drag_selection(event_data, layout)
       when :mouse_up
-        stop_scrollbar_drag || stop_selection
+        stop_scrollbar_drag || stop_viewport_drag || stop_selection
       else
         false
       end
@@ -352,6 +352,18 @@ module RubyRich
       true
     end
 
+    def start_viewport_drag(event_data, layout)
+      return false unless layout
+      return false unless event_data[:button] == :left
+      return false if event_data[:x] >= layout.x_offset + content_width
+      return false unless event_data[:y].between?(layout.y_offset, layout.y_offset + @height - 1)
+
+      @dragging_viewport = true
+      @drag_start_y = event_data[:y]
+      @drag_start_scroll_top = @scroll_top
+      true
+    end
+
     def drag_scrollbar(event_data, layout)
       return false unless @dragging_scrollbar && layout
 
@@ -367,6 +379,14 @@ module RubyRich
       true
     end
 
+    def drag_viewport(event_data, layout)
+      return false unless @dragging_viewport && layout
+
+      delta_y = event_data[:y] - @drag_start_y
+      scroll_to(@drag_start_scroll_top - delta_y)
+      true
+    end
+
     def drag_selection(event_data, layout)
       return false unless @selecting && layout
 
@@ -377,6 +397,14 @@ module RubyRich
     def stop_scrollbar_drag
       was_dragging = @dragging_scrollbar
       @dragging_scrollbar = false
+      @drag_start_y = nil
+      @drag_start_scroll_top = nil
+      was_dragging
+    end
+
+    def stop_viewport_drag
+      was_dragging = @dragging_viewport
+      @dragging_viewport = false
       @drag_start_y = nil
       @drag_start_scroll_top = nil
       was_dragging

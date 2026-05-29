@@ -193,16 +193,31 @@ module RubyRich
     end
 
     def render_lines(width:, placeholder: nil, focused: true)
+      _ = focused
       content = value
       return [placeholder.to_s] if content.empty? && placeholder
 
       rendered = []
-      line_index, col = cursor_line_col
-      lines.each_with_index do |line, index|
-        marker_col = focused && index == line_index ? col : nil
-        rendered.concat(wrap_line_with_cursor(line, width, marker_col))
+      lines.each do |line|
+        rendered.concat(wrap_line_without_cursor(line, width))
       end
       rendered.empty? ? [""] : rendered
+    end
+
+    def cursor_visual_position(width:)
+      line_index, cursor_col = cursor_line_col
+      row = 0
+
+      lines.each_with_index do |line, index|
+        if index == line_index
+          cursor_row, display_col = cursor_position_in_wrapped_line(line, width, cursor_col)
+          return [row + cursor_row, display_col]
+        end
+
+        row += wrap_line_without_cursor(line, width).length
+      end
+
+      [row, 0]
     end
 
     private
@@ -332,30 +347,46 @@ module RubyRich
       nil
     end
 
-    def wrap_line_with_cursor(line, width, marker_col)
+    def wrap_line_without_cursor(line, width)
       width = [width, 1].max
       segments = []
       current = +""
       current_width = 0
-      chars = line.chars
-      chars.each_with_index do |char, index|
+
+      line.chars.each do |char|
         char_width = display_width(char)
-        if current_width + char_width > width
+        if current_width + char_width > width && !current.empty?
           segments << current
           current = +""
           current_width = 0
         end
-        current << (marker_col == index ? cursor_marker(char) : char)
+
+        current << char
         current_width += char_width
       end
 
-      current << cursor_marker(" ") if marker_col == chars.length
       segments << current
       segments
     end
 
-    def cursor_marker(char)
-      "#{AnsiCode.inverse}#{char}#{AnsiCode.reset}"
+    def cursor_position_in_wrapped_line(line, width, cursor_col)
+      width = [width, 1].max
+      row = 0
+      display_col = 0
+
+      line.chars.each_with_index do |char, index|
+        char_width = display_width(char)
+        if display_col + char_width > width && display_col.positive?
+          row += 1
+          display_col = 0
+        end
+
+        return [row, display_col] if index == cursor_col
+
+        display_col += char_width
+      end
+
+      [row, display_col]
     end
 
     def display_width(char)

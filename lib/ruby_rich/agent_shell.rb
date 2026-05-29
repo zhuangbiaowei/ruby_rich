@@ -42,7 +42,7 @@ module RubyRich
       self
     end
 
-    def start(refresh_rate: 24, mouse: true, alt_screen: false)
+    def start(refresh_rate: 24, mouse: true, alt_screen: true)
       @state_mutex.synchronize { @state = :starting }
       Live.start(@layout, refresh_rate: refresh_rate, mouse: mouse, alt_screen: alt_screen, autowrap: false) do |live|
         @state_mutex.synchronize do

@@ -334,11 +334,22 @@ module RubyRich
 
       capture = root.instance_variable_get(:@mouse_capture)
       target = capture && [:mouse_drag, :mouse_up].include?(event_data[:name]) ? capture : (hit_test(event_data[:x], event_data[:y]) || self)
+      dispatch_mouse_target_event(event_data, target) if event_data[:name] == :mouse_down
       handled = target.bubble_mouse_event(event_data)
 
       root.instance_variable_set(:@mouse_capture, target) if event_data[:name] == :mouse_down && handled
       root.instance_variable_set(:@mouse_capture, nil) if event_data[:name] == :mouse_up
       handled
+    end
+
+    def dispatch_mouse_target_event(event_data, target)
+      target.bubble_mouse_event(
+        event_data.merge(
+          name: :mouse_target,
+          target_layout: target,
+          original_name: event_data[:name]
+        )
+      )
     end
 
     protected

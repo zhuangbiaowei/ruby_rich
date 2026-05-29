@@ -73,6 +73,27 @@ module RubyRich
       @menu_open
     end
 
+    def native_cursor_position
+      return nil unless focused?
+
+      input_width = [inner_width - 2, 1].max
+      editor_row, editor_col = @editor.cursor_visual_position(width: input_width)
+      raw_row = [@attachments.length, 3].min + editor_row
+      raw_col = 2 + editor_col
+
+      raw_height = [@height.to_i, 1].max
+      raw_lines = []
+      raw_lines.concat(render_attachments)
+      raw_lines.concat(render_input_lines)
+      raw_lines.concat(render_menu_lines) if menu_open?
+
+      clipped_rows = [raw_lines.length - raw_height, 0].max
+      visible_row = raw_row - clipped_rows
+      return nil if visible_row.negative? || visible_row >= raw_height
+
+      [visible_row, raw_col]
+    end
+
     def wants_tab?
       focused? && (menu_open? || @editor.value.include?("/"))
     end
@@ -229,7 +250,7 @@ module RubyRich
       elsif !@editor.empty?
         @editor.clear
       else
-        blur
+        focus
       end
     end
 

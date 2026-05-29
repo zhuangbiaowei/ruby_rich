@@ -29,8 +29,8 @@ module RubyRich
         end
       end
 
-      root_layout.key(:mouse_down, priority) do |event_data, _live|
-        entry = entry_at(event_data[:x], event_data[:y])
+      root_layout.key(:mouse_target, priority) do |event_data, _live|
+        entry = entry_for_layout(event_data[:target_layout]) || entry_at(event_data[:x], event_data[:y])
         if entry
           focus(entry[:name])
           false
@@ -72,6 +72,17 @@ module RubyRich
 
     def entry_at(x, y)
       @entries.reverse.find { |entry| entry[:layout].contains?(x, y) }
+    end
+
+    def entry_for_layout(layout)
+      current = layout
+      while current
+        entry = @entries.reverse.find { |item| item[:layout] == current }
+        return entry if entry
+
+        current = current.parent
+      end
+      nil
     end
   end
 end
