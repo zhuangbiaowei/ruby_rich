@@ -79,9 +79,15 @@ module RubyRich
         "#{contents}\n"
       end
 
-      def emphasis(text)      = "#{AnsiCode.italic}#{text}#{AnsiCode.reset}"
-      def double_emphasis(text) = "#{AnsiCode.bold}#{text}#{AnsiCode.reset}"
-      def strikethrough(text)   = "#{AnsiCode.strikethrough}#{text}#{AnsiCode.reset}"
+      def emphasis(text)
+        "#{AnsiCode.italic}#{text}#{AnsiCode.reset}"
+      end
+      def double_emphasis(text)
+        "#{AnsiCode.bold}#{text}#{AnsiCode.reset}"
+      end
+      def strikethrough(text)
+        "#{AnsiCode.strikethrough}#{text}#{AnsiCode.reset}"
+      end
 
       def link(link, title, content)
         title_part = title && !title.empty? ? " - #{title}" : ""
@@ -97,7 +103,9 @@ module RubyRich
         "#{AnsiCode.color(:black, true)}#{"─" * @options[:width]}#{AnsiCode.reset}\n\n"
       end
 
-      def linebreak = "\n"
+      def linebreak
+        "\n"
+      end
 
       # ---- table callbacks ----
 

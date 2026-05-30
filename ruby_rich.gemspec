@@ -20,5 +20,5 @@ Gem::Specification.new do |s|
   s.add_dependency 'redcarpet', '~> 3.6.1'
   s.add_dependency 'unicode-display_width', '>= 1.5', '< 3.0'
   
-  s.required_ruby_version = '>= 2.7.0'
+  s.required_ruby_version = '>= 2.6.0'
 end
