@@ -13,7 +13,7 @@ A comprehensive Ruby terminal UI toolkit inspired by Python Rich, providing eleg
 
 ### Advanced Content Rendering
 - 🖼️ **Syntax Highlighting** - Built-in support for 200+ programming languages
-- 📄 **Markdown Rendering** - Full markdown support with terminal-optimized output
+- 📄 **Markdown Rendering** - GFM-compliant markdown with terminal-optimized output (powered by kramdown)
 - 🌳 **Tree Display** - Beautiful hierarchical data visualization
 - 📊 **Enhanced Tables** - Auto-expanding tables with rich formatting
 
@@ -98,6 +98,9 @@ puts RubyRich.syntax(python_code, 'python')
 ```
 
 ### Markdown Rendering
+
+Powered by [kramdown](https://github.com/gettalong/kramdown), a pure-Ruby GFM-compliant parser.
+
 ```ruby
 markdown_text = <<~MARKDOWN
 # Project Documentation
@@ -106,6 +109,21 @@ markdown_text = <<~MARKDOWN
 - **Rich formatting**
 - *Syntax highlighting*
 - `Code blocks`
+- ~~Strikethrough text~~
+
+## Definition Lists
+kramdown
+: A fast, pure-Ruby Markdown converter
+
+## Tables
+
+| Feature | Status |
+|---------|--------|
+| GFM Tables | ✅ Supported |
+| Footnotes | ✅ Supported[^1] |
+| Definition Lists | ✅ Supported |
+
+[^1]: Footnotes are rendered inline in terminal mode.
 
 ### Code Example
 ```ruby

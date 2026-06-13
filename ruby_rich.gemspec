@@ -17,7 +17,8 @@ Gem::Specification.new do |s|
   s.add_dependency 'rouge', '>= 3.14', '< 4.0'
   s.add_dependency 'tty-cursor', '~> 0.7.1'
   s.add_dependency 'tty-screen', '~> 0.8.2'
-  s.add_dependency 'redcarpet', '~> 3.6.1'
+  s.add_dependency 'kramdown', '~> 2.4'
+  s.add_dependency 'kramdown-parser-gfm', '~> 1.1'
   s.add_dependency 'unicode-display_width', '>= 1.5', '< 3.0'
   
   s.required_ruby_version = '>= 2.6.0'

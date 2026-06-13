@@ -412,6 +412,8 @@ module RubyRich
     private
 
     def render_entry(entry, index)
+      return entry.content.to_s.split("\n", -1) if entry.metadata[:plain]
+
       case entry.type
       when :user
         render_plain_message(entry.content, first_prefix: "#{AnsiCode.color(:blue, true)}●#{AnsiCode.reset} ", rest_prefix: "  ")

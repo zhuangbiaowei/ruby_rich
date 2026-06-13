@@ -5,7 +5,7 @@ require 'logger'
 require 'rouge'
 require 'tty-cursor'
 require 'tty-screen'
-require 'redcarpet'
+require 'kramdown'
 
 # Load all internal modules
 require_relative 'ruby_rich/console'

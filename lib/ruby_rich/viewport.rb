@@ -1,11 +1,21 @@
 # frozen_string_literal: true
 
+require "base64"
+
 module RubyRich
   class Viewport
     attr_accessor :width, :height, :scroll_top
     attr_reader :content, :selected_text
 
-    def initialize(content = "", scrollbar: true, auto_scroll: false, scrollbar_style: :blue)
+    # drag_mode controls what left-click drag does in the content area:
+    #   :viewport  – drag scrolls the viewport (default, backward-compatible)
+    #   :selection – drag selects text
+    DRAG_MODES = [:viewport, :selection].freeze
+
+    def initialize(content = "",
+                   scrollbar: true, auto_scroll: false,
+                   scrollbar_style: :blue, auto_copy: true,
+                   drag_mode: :viewport)
       @content = content
       @scrollbar = scrollbar
       @auto_scroll = auto_scroll
@@ -22,6 +32,8 @@ module RubyRich
       @selection_end = nil
       @selected_text = ""
       @focused = true
+      @auto_copy = auto_copy
+      @drag_mode = DRAG_MODES.include?(drag_mode) ? drag_mode : :viewport
       @rendered_lines_cache_key = nil
       @rendered_lines_cache = nil
     end
@@ -88,10 +100,14 @@ module RubyRich
         true
       when :mouse_down
         return copy_selection if event_data[:button] == :right
-
-        start_scrollbar_drag(event_data, layout) || start_viewport_drag(event_data, layout)
+        if @drag_mode == :selection
+          start_scrollbar_drag(event_data, layout) || start_selection(event_data, layout)
+        else
+          start_scrollbar_drag(event_data, layout) || start_viewport_drag(event_data, layout)
+        end
       when :mouse_drag
-        drag_scrollbar(event_data, layout) || drag_viewport(event_data, layout) || drag_selection(event_data, layout)
+        drag_scrollbar(event_data, layout) ||
+          (@drag_mode == :selection ? drag_selection(event_data, layout) : (drag_viewport(event_data, layout) || drag_selection(event_data, layout)))
       when :mouse_up
         stop_scrollbar_drag || stop_viewport_drag || stop_selection
       else
@@ -415,7 +431,7 @@ module RubyRich
 
       @selecting = false
       @selected_text = extract_selected_text
-      copy_selection
+      copy_selection if @auto_copy
       true
     end
 
@@ -477,6 +493,7 @@ module RubyRich
           escape << char
           if char == "m"
             result << escape
+            result << AnsiCode.inverse if active
             escape = +""
             in_escape = false
           end
@@ -531,18 +548,61 @@ module RubyRich
       text.gsub(/\e\[[0-9;:]*m/, "")
     end
 
+    # Copy text to the system clipboard, trying every available method in
+    # sequence and falling back to the OSC 52 terminal clipboard so that
+    # remote (SSH) sessions also work.
     def copy_to_clipboard(text)
-      if RubyRich::Terminal.windows?
-        copy_to_windows_clipboard(text)
-      elsif ENV["WAYLAND_DISPLAY"]
-        IO.popen("wl-copy", "w") { |io| io.write(text) }
-      elsif ENV["DISPLAY"]
-        IO.popen("xclip -selection clipboard", "w") { |io| io.write(text) }
-      elsif RUBY_PLATFORM.match?(/darwin/)
-        IO.popen("pbcopy", "w") { |io| io.write(text) }
+      text = text.to_s
+      return false if text.empty?
+      return true if RubyRich::Terminal.windows? && try_windows_clipboard(text)
+
+      clipboard_commands.each do |command|
+        return true if write_clipboard_command(command, text)
       end
+
+      copy_to_terminal_clipboard(text)
+    end
+
+    # Ordered list of [command, *args] arrays to try for clipboard access.
+    def clipboard_commands
+      commands = []
+      commands << ["wl-copy"] if ENV["WAYLAND_DISPLAY"]
+      if ENV["DISPLAY"]
+        commands << ["xclip", "-selection", "clipboard"]
+        commands << ["xsel", "--clipboard", "--input"]
+      end
+      commands << ["pbcopy"] if RUBY_PLATFORM.match?(/darwin/)
+      commands
+    end
+
+    # Attempt to write text to a given clipboard command via a pipe.
+    # Returns true when the subprocess exits successfully.
+    def write_clipboard_command(command, text)
+      IO.popen(command, "w") { |io| io.write(text) }
+      $?&.success? == true
     rescue IOError, SystemCallError
-      nil
+      false
+    end
+
+    # Try the OS-specific Windows clipboard helper and return true when it
+    # succeeds (any IO/Syscall error is treated as failure).
+    def try_windows_clipboard(text)
+      copy_to_windows_clipboard(text)
+      true
+    rescue IOError, SystemCallError
+      false
+    end
+
+    # OSC 52 terminal clipboard – the only fallback that works over SSH.
+    # Encoded payload is emitted on stdout for the hosting terminal to
+    # capture.
+    def copy_to_terminal_clipboard(text)
+      encoded = Base64.strict_encode64(text.encode(Encoding::UTF_8))
+      $stdout.print("\e]52;c;#{encoded}\a")
+      $stdout.flush
+      true
+    rescue Encoding::UndefinedConversionError, Encoding::InvalidByteSequenceError, IOError, SystemCallError
+      false
     end
 
     def copy_to_windows_clipboard(text)

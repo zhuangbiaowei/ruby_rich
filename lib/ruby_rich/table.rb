@@ -126,13 +126,13 @@ module RubyRich
       border_chars = BORDER_STYLES[@border_style]
       
       row_content = row.map.with_index do |cell, i|
-        rendered = cell.render
-        content = bold ? rendered : align_cell(rendered, column_widths[i])
-        aligned_content = align_cell(content, column_widths[i])
+        rendered = cell.render.sub(/\e\[0m\z/, '')
+        content = bold ? "\e[1m#{rendered}" : rendered
+        aligned_content = align_cell(content, column_widths[i]).sub(/\e\[0m\z/, '')
         " #{aligned_content} "
       end.join(border_chars[:vertical])
       
-      ["#{border_chars[:left]}#{row_content}#{border_chars[:right]}"]
+      ["#{border_chars[:left]}#{row_content}#{border_chars[:right]}\e[0m"]
     end
 
     def render_styled_multiline_row(row, column_widths)
@@ -213,10 +213,10 @@ module RubyRich
   
     def render_row(row, column_widths, bold: false)
       row.map.with_index do |cell, i|
-        rendered = cell.render
-        content = bold ? rendered : align_cell(rendered, column_widths[i])
-        align_cell(content, column_widths[i])
-      end.join(" | ").prepend("| ").concat(" |")
+        rendered = cell.render.sub(/\e\[0m\z/, '')
+        content = bold ? "\e[1m#{rendered}" : rendered
+        align_cell(content, column_widths[i]).sub(/\e\[0m\z/, '')
+      end.join(" | ").prepend("| ").concat(" |\e[0m")
     end
   
     def render_multiline_row(row, column_widths)
@@ -254,7 +254,7 @@ module RubyRich
   
       # Render each line of the row
       (0...max_height).map do |line_index|
-        row_lines.map { |lines| lines[line_index] }.join(" | ").prepend("| ").concat(" |")
+        row_lines.map { |lines| lines[line_index].sub(/\e\[0m\z/, '') }.join(" | ").prepend("| ").concat(" |\e[0m")
       end
     end
 
@@ -263,7 +263,7 @@ module RubyRich
     end
   
     def align_cell(content, width)
-      style_sequences = content.scan(/\e\[[0-9;]*m/)
+      style_sequences = content.scan(/\e\[[0-9;]*m/).reject { |s| s == "\e[0m" }
       plain_content = content.gsub(/\e\[[0-9;]*m/, '')
       
       # 计算实际显示宽度
@@ -282,7 +282,7 @@ module RubyRich
       end
       
       if style_sequences.any?
-        style_sequences.first + padded_content + "\e[0m"
+        style_sequences.first + padded_content
       else
         padded_content
       end
